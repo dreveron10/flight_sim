@@ -1,0 +1,2926 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Mission Control</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Mission Control simulator
+ * Layout: a control strip on top (the simulator), then the two real screens
+ * below it (phone and ground station) side by side on wide displays,
+ * stacked on a phone. Single dark theme by choice: this is an instrument
+ * panel read outdoors, so contrast is high and numbers are big.
+ */
+:root {
+  --bg: #0a0e13;
+  --panel: #121820;
+  --panel-2: #1a222c;
+  --line: #27323f;
+  --fg: #e8eef5;
+  --muted: #8b9bb0;
+  --faint: #55637a;
+  --accent: #ffb020;        /* amber: armed, controls, attention */
+  --data: #5cc8ff;          /* cool blue: live numbers */
+  --good: #3ddc84;
+  --warn: #ffb020;
+  --bad: #ff5a5f;
+  --st-pad: #8b9bb0;
+  --st-armed: #ffb020;
+  --st-boost: #ff7a45;
+  --st-coast: #ffa36b;
+  --st-apogee: #c9a6ff;
+  --st-descent: #5cc8ff;
+  --st-landed: #3ddc84;
+  --st-fault: #ff5a5f;
+  --font-ui: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --font-num: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  --radius: 10px;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.35;
+  padding-block: 0 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* ---- top bar ---------------------------------------------------------- */
+.topbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding-block: 14px 10px;
+}
+.topbar h1 {
+  margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.02em;
+}
+.topbar h1 small { color: var(--muted); font-weight: 500; font-size: 13px; margin-left: 8px; }
+.sim-status { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+}
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.live { color: var(--good); }
+.pill.paused { color: var(--accent); }
+
+/* ---- control strip ------------------------------------------------------ */
+.controls {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px;
+}
+.ctl-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ctl-group .label { margin-bottom: -2px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; font-weight: 600; font-size: 13px; color: var(--fg);
+  transition: background 120ms, border-color 120ms, transform 60ms;
+}
+.btn:hover { border-color: var(--muted); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.primary { background: var(--accent); color: #141005; border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+.btn.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); border-color: var(--accent); color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button {
+  background: transparent; border: 0; padding: 7px 12px; font-weight: 600; font-size: 13px; color: var(--muted);
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--panel-2); color: var(--fg); }
+select, input[type="number"] {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+}
+input[type="range"] { accent-color: var(--accent); width: 120px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+@media (min-width: 760px) {
+  .ctl-group.site { grid-column: span 2; }
+  .ctl-group.site .site-grid { grid-template-columns: repeat(3, auto minmax(0, 1fr)); }
+}
+.site-grid { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 12px; }
+.site-grid input { width: 100%; min-width: 0; padding: 5px 6px; font-size: 12px; font-family: var(--font-num); }
+
+.raw {
+  grid-column: 1 / -1;
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: baseline;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+  font-size: 12px; min-width: 0;
+}
+.raw .hex { font-family: var(--font-num); overflow-wrap: anywhere; color: var(--data); font-size: 12px; line-height: 1.5; }
+.raw .hex b { color: var(--muted); font-weight: 500; }
+.raw .hex i { color: var(--accent); font-style: normal; }
+.raw .meta { color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+.raw .meta span.bad { color: var(--bad); }
+
+/* ---- screens area ------------------------------------------------------- */
+.view-switch { display: flex; gap: 10px; align-items: center; padding-block: 14px 10px; flex-wrap: wrap; }
+.view-switch .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+.screens { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
+.screen-wrap { display: flex; flex-direction: column; gap: 8px; align-items: center; min-width: 0; }
+.screen-wrap > .label { align-self: flex-start; }
+
+/* ---- phone ------------------------------------------------------------- */
+.phone {
+  width: min(390px, 100%); height: 760px;
+  background: #06090d; border: 1px solid var(--line); border-radius: 28px;
+  display: flex; flex-direction: column; overflow: hidden; position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.phone-head {
+  display: flex; align-items: center; gap: 10px; padding: 14px 16px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.phone-head .title { font-weight: 700; font-size: 16px; }
+.phone-head .state-pill { margin-left: auto; }
+.state-pill {
+  padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: #06090d; background: var(--st-pad);
+}
+.phone-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.phone-body > * { flex-shrink: 0; }
+.phone-tabs {
+  display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line);
+  background: #0a0e13; padding: 6px 8px 10px;
+}
+.phone-tabs button {
+  background: transparent; border: 0; color: var(--muted); font-size: 11px; font-weight: 600;
+  padding: 8px 4px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; align-items: center;
+}
+.phone-tabs button svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.phone-tabs button.on { color: var(--accent); }
+.unit-btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: var(--muted); }
+
+.link-line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.link-line .bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; }
+.link-line .bars i { width: 3px; background: var(--faint); border-radius: 1px; }
+.link-line .bars i:nth-child(1) { height: 4px; } .link-line .bars i:nth-child(2) { height: 6px; }
+.link-line .bars i:nth-child(3) { height: 8px; } .link-line .bars i:nth-child(4) { height: 10px; } .link-line .bars i:nth-child(5) { height: 12px; }
+.link-line .bars i.on { background: var(--good); }
+.link-line .age { margin-left: auto; font-family: var(--font-num); }
+.link-line .age.stale { color: var(--warn); font-weight: 700; }
+.link-line .age.lost { color: var(--bad); font-weight: 700; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.card h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.check { display: flex; flex-direction: column; gap: 0; }
+.check-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+.check-item:last-child { border-bottom: 0; }
+.check-item .ind { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); flex: none; }
+.check-item .ind.ok { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent); }
+.check-item .ind.warn { background: var(--warn); }
+.check-item .ind.bad { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 20%, transparent); }
+.check-item .name { flex: 1; font-weight: 600; }
+.check-item .val { font-family: var(--font-num); color: var(--muted); font-size: 13px; }
+.check-item .val.hi { color: var(--fg); }
+.pyro-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pyro {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 6px; text-align: center;
+}
+.pyro .ch { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; }
+.pyro .st { font-weight: 700; font-size: 12px; margin-top: 2px; }
+.pyro.cont .st { color: var(--good); }
+.pyro.open .st { color: var(--faint); }
+.pyro.fired .st { color: var(--accent); }
+.pyro.fired { border-color: var(--accent); }
+.pad-summary { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-radius: 10px; font-weight: 700; font-size: 15px; background: var(--panel-2); border: 1px solid var(--line); }
+.pad-summary.go { color: var(--good); border-color: color-mix(in srgb, var(--good) 50%, var(--line)); }
+.pad-summary.nogo { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
+
+.big { display: flex; flex-direction: column; gap: 2px; }
+.big .v { font-family: var(--font-num); font-size: 56px; font-weight: 500; line-height: 1; color: var(--data); letter-spacing: -0.02em; }
+.big .v small { font-size: 18px; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
+.big.sm .v { font-size: 30px; }
+.big.sm .v small { font-size: 13px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.kv { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kv .v { font-family: var(--font-num); font-size: 20px; color: var(--fg); white-space: nowrap; }
+.kv .v small { font-size: 12px; color: var(--muted); margin-left: 3px; }
+.kv .v.warn { color: var(--warn); }
+.kv .v.bad { color: var(--bad); }
+.kv .v.good { color: var(--good); }
+.chart { width: 100%; height: 150px; display: block; border-radius: 8px; background: var(--bg); }
+.chart.tall { height: 200px; }
+.chart.map { height: 300px; }
+.tplus { font-family: var(--font-num); font-size: 15px; color: var(--muted); }
+.tplus b { color: var(--fg); font-weight: 500; }
+
+.compass-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.compass { width: 240px; height: 240px; max-width: 100%; }
+.compass .ring { fill: none; stroke: var(--line); stroke-width: 2; }
+.compass .tick { stroke: var(--faint); stroke-width: 2; }
+.compass .tick.major { stroke: var(--muted); stroke-width: 3; }
+.compass .cardinal { fill: var(--muted); font-family: var(--font-ui); font-weight: 700; font-size: 16px; text-anchor: middle; }
+.compass .cardinal.n { fill: var(--bad); }
+.compass .needle { fill: var(--accent); }
+.compass .needle-tail { fill: var(--panel-2); }
+.compass .hub { fill: var(--bg); stroke: var(--line); stroke-width: 2; }
+.compass .dist { fill: var(--fg); font-family: var(--font-num); font-size: 27px; text-anchor: middle; font-weight: 500; }
+.compass .dist-unit { fill: var(--muted); font-family: var(--font-ui); font-size: 12px; text-anchor: middle; letter-spacing: 0.08em; }
+.compass .brg { fill: var(--accent); font-family: var(--font-num); font-size: 16px; text-anchor: middle; }
+.compass.nofix .needle, .compass.nofix .needle-tail { opacity: 0.25; }
+.coords { font-family: var(--font-num); font-size: 15px; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+.coords span:nth-child(odd) { color: var(--muted); font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; align-self: center; }
+.note { font-size: 12px; color: var(--muted); }
+.copy-btn { margin-top: 8px; width: 100%; }
+
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.stat-grid .kv .v { font-size: 18px; }
+.flight-log { display: flex; flex-direction: column; gap: 0; }
+.flight-log div { display: grid; grid-template-columns: 70px 1fr auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.flight-log div:last-child { border-bottom: 0; }
+.flight-log .t { font-family: var(--font-num); color: var(--muted); }
+.flight-log .a { font-family: var(--font-num); }
+.empty { color: var(--faint); font-size: 13px; text-align: center; padding: 20px 0; }
+
+/* ---- ground station screen (real pixel size) ---------------------------- */
+.gs-scale { width: 100%; max-width: 480px; }
+.gs-scale-inner { transform-origin: top left; }
+.gs { width: 480px; height: 320px; display: block; background: #000; border: 1px solid var(--line); image-rendering: auto; }
+.gs-buttons { display: flex; gap: 8px; width: 100%; max-width: 480px; justify-content: center; }
+.gs-buttons .hw {
+  flex: 1; height: 44px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--fg); font-weight: 800; font-size: 14px; letter-spacing: 0.06em; user-select: none; touch-action: manipulation;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.5);
+}
+.gs-buttons .hw.sel { background: color-mix(in srgb, var(--accent) 25%, var(--panel-2)); border-color: var(--accent); color: var(--accent); }
+.gs-buttons .hw:active, .gs-buttons .hw.down { box-shadow: inset 0 2px 4px rgba(0,0,0,0.7); transform: translateY(1px); background: var(--line); }
+.gs-hw { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+@media (max-width: 480px) {
+  .phone { height: 700px; border-radius: 20px; }
+  .big .v { font-size: 48px; }
+}
+
+</style>
+
+<header class="topbar">
+  <h1>Mission Control <small id="profile-title">ZAFIRO I simulator</small></h1>
+  <div class="sim-status">
+    <span class="pill" id="sim-pill"><span class="dot"></span><span id="sim-pill-text">Ready</span></span>
+    <span class="pill num" id="sim-clock">T 0.0 s</span>
+  </div>
+</header>
+
+<section class="controls" aria-label="Simulator controls">
+  <div class="ctl-group">
+    <span class="label">Rocket</span>
+    <div class="row">
+      <select id="profile" aria-label="Flight profile">
+        <option value="zafiro">ZAFIRO I, AeroTech I218R, about 3,100 ft</option>
+        <option value="rubi">RUBI, AeroTech J500G, about 4,100 ft</option>
+      </select>
+    </div>
+    <div class="row">
+      <button class="btn" id="btn-arm">Arm</button>
+      <button class="btn primary" id="btn-launch" disabled>Launch</button>
+      <button class="btn" id="btn-pause">Pause</button>
+      <button class="btn danger" id="btn-reset">Reset</button>
+    </div>
+    <div class="row">
+      <span class="label">Speed</span>
+      <div class="seg" id="speed">
+        <button data-speed="1" class="on">1x</button>
+        <button data-speed="2">2x</button>
+        <button data-speed="5">5x</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ctl-group">
+    <span class="label">Fault injection</span>
+    <div class="row">
+      <label for="loss" style="font-size:13px">Packet loss</label>
+      <input type="range" id="loss" min="0" max="80" step="5" value="0">
+      <span class="num" id="loss-val">0%</span>
+    </div>
+    <label class="toggle"><input type="checkbox" id="f-gps"> GPS dropout</label>
+    <label class="toggle"><input type="checkbox" id="f-batt"> Low battery</label>
+    <div class="row"><button class="btn" id="f-baro">Baro glitch (one bad sample)</button></div>
+  </div>
+
+  <div class="ctl-group site">
+    <span class="label">Site (example coordinates, edit freely)</span>
+    <div class="site-grid">
+      <label for="pad-lat">Pad lat</label><input type="number" id="pad-lat" step="0.0001" value="18.2000">
+      <label for="pad-lon">Pad lon</label><input type="number" id="pad-lon" step="0.0001" value="-66.9000">
+      <label for="wind-spd">Wind m/s</label><input type="number" id="wind-spd" step="0.5" min="0" value="3.5">
+      <label for="wind-dir">From deg</label><input type="number" id="wind-dir" step="5" min="0" max="359" value="80">
+      <label for="gs-e">GS east m</label><input type="number" id="gs-e" step="10" value="180">
+      <label for="gs-n">GS north m</label><input type="number" id="gs-n" step="10" value="-90">
+    </div>
+    <span class="note">Site changes apply on Reset. The ground station position is the receiver's own GPS in the real system.</span>
+  </div>
+
+  <div class="raw" aria-live="off">
+    <span class="label">Last frame</span>
+    <div class="hex" id="raw-hex">waiting for first packet</div>
+    <span class="label">Link</span>
+    <div class="meta">
+      <span>received <b class="num" id="m-rx">0</b></span>
+      <span>lost <b class="num" id="m-lost">0</b></span>
+      <span>bad CRC <b class="num" id="m-crc">0</b></span>
+      <span>rate <b class="num" id="m-rate">0.0</b> Hz</span>
+      <span>bytes/frame <b class="num">46</b></span>
+    </div>
+  </div>
+</section>
+
+<div class="view-switch">
+  <div class="seg" id="view">
+    <button data-view="both" class="on">Both</button>
+    <button data-view="phone">Phone</button>
+    <button data-view="gs">Ground station</button>
+  </div>
+  <span class="hint">Every number below is decoded from the 46-byte frames above. Nothing reads the simulator directly.</span>
+</div>
+
+<section class="screens">
+  <!-- ============ PHONE ============ -->
+  <div class="screen-wrap" id="wrap-phone">
+    <span class="label">Phone app, 390 px wide</span>
+    <div class="phone" id="phone">
+      <div class="phone-head">
+        <span class="title" id="ph-title">ZAFIRO I</span>
+        <button class="unit-btn" id="unit-btn" title="Switch units">ft</button>
+        <span class="state-pill" id="ph-state">pad</span>
+      </div>
+
+      <!-- PAD -->
+      <div class="phone-body" id="tab-pad">
+        <div class="link-line">
+          <span class="bars" id="ph-bars"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="num" id="ph-rssi">-- dBm</span>
+          <span class="age num" id="ph-age">--</span>
+        </div>
+        <div class="pad-summary nogo" id="pad-summary">Checking...</div>
+        <div class="card">
+          <h3>Pad checklist</h3>
+          <div class="check" id="checklist"></div>
+        </div>
+        <div class="card">
+          <h3>Pyro channels</h3>
+          <div class="pyro-row" id="pyro-row"></div>
+          <p class="note" style="margin:8px 0 0">V1 flies with dummy loads. Continuity means the e-match circuit is closed. Ground tests are done from the ground station only.</p>
+        </div>
+        <div class="card">
+          <h3>Position</h3>
+          <div class="coords" id="pad-coords"></div>
+        </div>
+      </div>
+
+      <!-- FLIGHT -->
+      <div class="phone-body" id="tab-flight" hidden>
+        <div class="link-line">
+          <span class="bars" id="fl-bars"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="tplus" id="fl-tplus">T+ <b>0.0</b> s</span>
+          <span class="age num" id="fl-age">--</span>
+        </div>
+        <div class="big"><span class="label">Altitude AGL</span><span class="v" id="fl-alt">0<small>ft</small></span></div>
+        <canvas class="chart" id="fl-chart" width="358" height="150"></canvas>
+        <div class="two">
+          <div class="kv"><span class="label">Vertical speed</span><span class="v" id="fl-vz">0<small>ft/s</small></span></div>
+          <div class="kv"><span class="label">Max altitude</span><span class="v" id="fl-max">0<small>ft</small></span></div>
+        </div>
+        <div class="three">
+          <div class="kv"><span class="label">Accel</span><span class="v" id="fl-acc">1.0<small>g</small></span></div>
+          <div class="kv"><span class="label">Tilt</span><span class="v" id="fl-tilt">0<small>&deg;</small></span></div>
+          <div class="kv"><span class="label">Battery</span><span class="v" id="fl-batt">0.00<small>V</small></span></div>
+        </div>
+        <div class="card">
+          <h3>Events</h3>
+          <div class="flight-log" id="fl-log"><div class="empty">No launch yet</div></div>
+        </div>
+      </div>
+
+      <!-- RECOVERY -->
+      <div class="phone-body" id="tab-recovery" hidden>
+        <div class="link-line">
+          <span class="bars" id="rc-bars"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="num" id="rc-rssi">-- dBm</span>
+          <span class="age num" id="rc-age">--</span>
+        </div>
+        <div class="seg" id="rc-mode" style="align-self:center">
+          <button data-mode="compass" class="on">Compass</button>
+          <button data-mode="map">Map</button>
+        </div>
+        <div class="compass-wrap" id="rc-compass">
+          <svg class="compass" id="compass" viewBox="0 0 240 240" role="img" aria-label="Bearing to rocket">
+            <circle class="ring" cx="120" cy="120" r="112"></circle>
+            <g id="compass-ticks"></g>
+            <text class="cardinal n" x="120" y="30">N</text>
+            <text class="cardinal" x="214" y="126">E</text>
+            <text class="cardinal" x="120" y="220">S</text>
+            <text class="cardinal" x="26" y="126">W</text>
+            <g id="needle" transform="rotate(0 120 120)">
+              <polygon class="needle" points="120,36 128,120 112,120"></polygon>
+              <polygon class="needle-tail" points="120,204 128,120 112,120"></polygon>
+            </g>
+            <circle class="hub" cx="120" cy="120" r="60"></circle>
+            <text class="brg" x="120" y="104" id="cmp-brg">---&deg;</text>
+            <text class="dist" x="120" y="132" id="cmp-dist">--</text>
+            <text class="dist-unit" x="120" y="150" id="cmp-unit">FT</text>
+          </svg>
+          <span class="note" id="cmp-note">North-up. Bearing is from the ground station to the rocket's last GPS fix.</span>
+        </div>
+        <div id="rc-mapwrap" hidden>
+          <canvas class="chart map" id="rc-map" width="358" height="300"></canvas>
+          <span class="note">Offline track map, north up. Pad, you (ground station), the rocket's GPS track and last fix.</span>
+        </div>
+        <div class="card">
+          <h3>Rocket position</h3>
+          <div class="coords" id="rc-coords"></div>
+          <button class="btn copy-btn" id="copy-coords">Copy coordinates</button>
+          <div class="two" id="map-links" style="margin-top:8px" hidden>
+            <a class="btn" id="link-apple" href="#" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Open in Apple Maps</a>
+            <a class="btn" id="link-google" href="#" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">Open in Google Maps</a>
+          </div>
+        </div>
+        <div class="two">
+          <div class="kv"><span class="label">Rocket altitude</span><span class="v" id="rc-alt">--</span></div>
+          <div class="kv"><span class="label">Last fix</span><span class="v" id="rc-fixage">--</span></div>
+        </div>
+      </div>
+
+      <!-- POST FLIGHT -->
+      <div class="phone-body" id="tab-post" hidden>
+        <div class="card">
+          <h3>Flight summary</h3>
+          <div class="stat-grid" id="post-stats"><div class="empty" style="grid-column:1/-1">Completes after landing</div></div>
+        </div>
+        <canvas class="chart tall" id="post-chart" width="358" height="200"></canvas>
+        <div class="card">
+          <h3>Link statistics</h3>
+          <div class="stat-grid" id="post-link"></div>
+        </div>
+        <div class="card">
+          <h3>Timeline</h3>
+          <div class="flight-log" id="post-log"></div>
+        </div>
+      </div>
+
+      <nav class="phone-tabs" id="phone-tabs">
+        <button data-tab="pad" class="on"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg>Pad</button>
+        <button data-tab="flight"><svg viewBox="0 0 24 24"><path d="M12 3l3 7h-6zM9 10h6v6a3 3 0 0 1-6 0zM7 21h10"/></svg>Flight</button>
+        <button data-tab="recovery"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6l3 6-3 6-3-6z"/></svg>Recovery</button>
+        <button data-tab="post"><svg viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M7 16l4-6 3 3 5-7"/></svg>Post</button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ============ GROUND STATION ============ -->
+  <div class="screen-wrap" id="wrap-gs">
+    <span class="label">Ground station, 480 x 320 px (3.5 in), shown at real pixel size</span>
+    <div class="gs-scale" id="gs-scale"><div class="gs-scale-inner" id="gs-scale-inner">
+      <canvas class="gs" id="gs" width="480" height="320" aria-label="Ground station screen"></canvas>
+    </div></div>
+    <div class="gs-buttons" id="gs-buttons">
+      <button class="hw" data-btn="view" title="Cycle screens">VIEW</button>
+      <button class="hw" data-btn="up">&#9650;</button>
+      <button class="hw" data-btn="down">&#9660;</button>
+      <button class="hw sel" data-btn="select">SEL</button>
+      <button class="hw" data-btn="back">BACK</button>
+    </div>
+    <div class="gs-hw">
+      <span class="label">Handheld sensors</span>
+      <div class="row">
+        <label for="gs-heading" style="font-size:13px">Handheld heading</label>
+        <input type="range" id="gs-heading" min="0" max="359" step="1" value="0" style="width:160px">
+        <span class="num" id="gs-heading-val">000&deg;</span>
+      </div>
+      <span class="note">Keyboard works too: V, arrows, Enter (hold), Backspace.</span>
+    </div>
+  </div>
+</section>
+
+<script>
+"use strict";
+/* ---- telemetry.js ---- */
+/*
+ * telemetry.js : JavaScript twin of firmware/common/telemetry.h (format v1)
+ *
+ * Works in the browser and in Node (ES module, no dependencies).
+ * The byte layout is documented in telemetry.h and must never be changed
+ * on one side only. tests: node telemetry.test.mjs
+ */
+
+const TELEMETRY_SYNC = 0xa5;
+const TELEMETRY_VERSION = 1;
+const TELEMETRY_TYPE_TELEMETRY = 1;
+const TELEMETRY_HEADER_SIZE = 4;
+const TELEMETRY_PAYLOAD_SIZE = 40;
+const TELEMETRY_CRC_SIZE = 2;
+const TELEMETRY_FRAME_SIZE =
+  TELEMETRY_HEADER_SIZE + TELEMETRY_PAYLOAD_SIZE + TELEMETRY_CRC_SIZE;
+
+const STATE = Object.freeze({
+  IDLE: 0, PAD: 1, ARMED: 2, BOOST: 3, COAST: 4,
+  APOGEE: 5, DROGUE: 6, MAIN: 7, LANDED: 8, FAULT: 9,
+});
+
+const STATE_NAMES = Object.freeze([
+  "idle", "pad", "armed", "boost", "coast",
+  "apogee", "drogue", "main", "landed", "fault",
+]);
+
+const FLAG = Object.freeze({
+  GPS_VALID: 1 << 0,
+  BARO_OK: 1 << 1,
+  IMU_OK: 1 << 2,
+  ARMED: 1 << 3,
+  LOW_BATTERY: 1 << 4,
+  LOGGING: 1 << 5,
+  TEST_MODE: 1 << 6,
+});
+
+const GPS_FIX = Object.freeze({ NONE: 0, FIX_2D: 2, FIX_3D: 3 });
+
+/** Fresh packet with every field zeroed. */
+function emptyPacket() {
+  return {
+    counter: 0,
+    time_ms: 0,
+    state: STATE.IDLE,
+    flags: 0,
+    altitude_agl_cm: 0,
+    vertical_vel_cms: 0,
+    accel_x_mg: 0,
+    accel_y_mg: 0,
+    accel_z_mg: 0,
+    tilt_deg: 0,
+    battery_mv: 0,
+    pyro_continuity: 0,
+    pyro_fired: 0,
+    gps_lat_e7: 0,
+    gps_lon_e7: 0,
+    gps_alt_mm: 0,
+    gps_fix: GPS_FIX.NONE,
+    gps_sats: 0,
+    rssi_dbm: 0,
+  };
+}
+
+/** CRC-16/CCITT-FALSE, identical to telemetry_crc16 in C. */
+function crc16(bytes, len = bytes.length) {
+  let crc = 0xffff;
+  for (let i = 0; i < len; i++) {
+    crc ^= bytes[i] << 8;
+    for (let b = 0; b < 8; b++) {
+      crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+    }
+  }
+  return crc;
+}
+
+/** Serialize a packet object into a 46-byte Uint8Array. */
+function encode(pkt) {
+  const buf = new Uint8Array(TELEMETRY_FRAME_SIZE);
+  const dv = new DataView(buf.buffer);
+  const LE = true;
+
+  dv.setUint8(0, TELEMETRY_SYNC);
+  dv.setUint8(1, TELEMETRY_VERSION);
+  dv.setUint8(2, TELEMETRY_TYPE_TELEMETRY);
+  dv.setUint8(3, TELEMETRY_PAYLOAD_SIZE);
+
+  dv.setUint16(4, pkt.counter & 0xffff, LE);
+  dv.setUint32(6, pkt.time_ms >>> 0, LE);
+  dv.setUint8(10, pkt.state & 0xff);
+  dv.setUint8(11, pkt.flags & 0x7f);
+  dv.setInt32(12, pkt.altitude_agl_cm, LE);
+  dv.setInt16(16, pkt.vertical_vel_cms, LE);
+  dv.setInt16(18, pkt.accel_x_mg, LE);
+  dv.setInt16(20, pkt.accel_y_mg, LE);
+  dv.setInt16(22, pkt.accel_z_mg, LE);
+  dv.setUint8(24, pkt.tilt_deg & 0xff);
+  dv.setUint16(25, pkt.battery_mv & 0xffff, LE);
+  dv.setUint8(27, pkt.pyro_continuity & 0x0f);
+  dv.setUint8(28, pkt.pyro_fired & 0x0f);
+  dv.setInt32(29, pkt.gps_lat_e7, LE);
+  dv.setInt32(33, pkt.gps_lon_e7, LE);
+  dv.setInt32(37, pkt.gps_alt_mm, LE);
+  dv.setUint8(41, pkt.gps_fix & 0xff);
+  dv.setUint8(42, pkt.gps_sats & 0xff);
+  dv.setInt8(43, pkt.rssi_dbm);
+
+  dv.setUint16(44, crc16(buf, TELEMETRY_HEADER_SIZE + TELEMETRY_PAYLOAD_SIZE), LE);
+  return buf;
+}
+
+/**
+ * Parse a frame. Returns { ok: true, packet } or { ok: false, error }
+ * where error is one of "length", "sync", "version", "type", "payload_len", "crc".
+ */
+function decode(bytes) {
+  if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+  if (bytes.length !== TELEMETRY_FRAME_SIZE) return { ok: false, error: "length" };
+  if (bytes[0] !== TELEMETRY_SYNC) return { ok: false, error: "sync" };
+  if (bytes[1] !== TELEMETRY_VERSION) return { ok: false, error: "version" };
+  if (bytes[2] !== TELEMETRY_TYPE_TELEMETRY) return { ok: false, error: "type" };
+  if (bytes[3] !== TELEMETRY_PAYLOAD_SIZE) return { ok: false, error: "payload_len" };
+
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const LE = true;
+  const crcRx = dv.getUint16(44, LE);
+  const crcCalc = crc16(bytes, TELEMETRY_HEADER_SIZE + TELEMETRY_PAYLOAD_SIZE);
+  if (crcRx !== crcCalc) return { ok: false, error: "crc" };
+
+  const packet = {
+    counter: dv.getUint16(4, LE),
+    time_ms: dv.getUint32(6, LE),
+    state: dv.getUint8(10),
+    flags: dv.getUint8(11),
+    altitude_agl_cm: dv.getInt32(12, LE),
+    vertical_vel_cms: dv.getInt16(16, LE),
+    accel_x_mg: dv.getInt16(18, LE),
+    accel_y_mg: dv.getInt16(20, LE),
+    accel_z_mg: dv.getInt16(22, LE),
+    tilt_deg: dv.getUint8(24),
+    battery_mv: dv.getUint16(25, LE),
+    pyro_continuity: dv.getUint8(27),
+    pyro_fired: dv.getUint8(28),
+    gps_lat_e7: dv.getInt32(29, LE),
+    gps_lon_e7: dv.getInt32(33, LE),
+    gps_alt_mm: dv.getInt32(37, LE),
+    gps_fix: dv.getUint8(41),
+    gps_sats: dv.getUint8(42),
+    rssi_dbm: dv.getInt8(43),
+  };
+  return { ok: true, packet };
+}
+
+function stateName(state) {
+  return STATE_NAMES[state] ?? "?";
+}
+
+/* ---- unit helpers for the UI (wire units -> display units) ----------- */
+
+const toFeet = (cm) => cm / 30.48;
+const toMeters = (cm) => cm / 100;
+const toFps = (cms) => cms / 30.48;
+const toMps = (cms) => cms / 100;
+const toG = (mg) => mg / 1000;
+const toVolts = (mv) => mv / 1000;
+const toDegrees = (e7) => e7 / 1e7;
+
+function toHex(bytes) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function fromHex(hex) {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return out;
+}
+
+
+/* ---- flight-model.js ---- */
+/*
+ * flight-model.js : the fake rocket for the Mission Control simulator.
+ *
+ * Simulates a dual-deploy high power flight with a simple 1D vertical model
+ * plus horizontal wind drift, runs the flight computer's state machine the
+ * way the real firmware will, adds sensor noise, and emits real telemetry
+ * frames (46 bytes, format v1) at 5 Hz of simulated time.
+ *
+ * Nothing in the UI should read this object directly. The UI only sees
+ * the bytes that come out of onFrame(), the same as it will from the radio.
+ *
+ * The motors are approximations of the published curves, good enough for
+ * the screens to look right. Not a substitute for OpenRocket.
+ */
+
+
+const G = 9.80665;
+const FT = 0.3048;
+
+/* Example launch site and ground station in Puerto Rico. Placeholder
+ * coordinates, change to the real field in the Site box. */
+const DEFAULT_SITE = {
+  name: "Example field, PR",
+  padLat: 18.2,
+  padLon: -66.9,
+  padAltMsl_m: 120,
+  gsOffsetEast_m: 180,   /* where the ground station stands, relative to pad */
+  gsOffsetNorth_m: -90,
+  windSpeed_mps: 3.5,
+  windFromDeg: 80,       /* wind blows FROM this heading (east wind) */
+};
+
+const PROFILES = {
+  zafiro: {
+    id: "zafiro",
+    name: "ZAFIRO I",
+    motor: "AeroTech I218R",
+    targetApogee_ft: 3100,
+    liftoffMass_kg: 1.85,
+    propellantMass_kg: 0.212,
+    totalImpulse_Ns: 371,
+    burnTime_s: 1.7,
+    drogueTerminal_mps: 24,
+    mainTerminal_mps: 5.5,
+    mainDeploy_ft: 600,
+    pyroChannels: 2,
+  },
+  rubi: {
+    id: "rubi",
+    name: "RUBI",
+    motor: "AeroTech J500G",
+    targetApogee_ft: 4100,
+    liftoffMass_kg: 4.0,
+    propellantMass_kg: 0.58,
+    totalImpulse_Ns: 1075,
+    burnTime_s: 2.15,
+    drogueTerminal_mps: 28,
+    mainTerminal_mps: 6.0,
+    mainDeploy_ft: 700,
+    pyroChannels: 2,
+  },
+};
+
+/* Box-Muller gaussian noise */
+function gauss(sigma) {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function airDensity(altMsl_m) {
+  /* ISA, troposphere */
+  const T = 288.15 - 0.0065 * altMsl_m;
+  const p = 101325 * Math.pow(T / 288.15, 5.2559);
+  return p / (287.05 * T);
+}
+
+/* Thrust curve: quick ramp, peak early, taper to burnout. Scaled so the
+ * integral equals the published total impulse. */
+function thrustShape(t, burn) {
+  if (t < 0 || t >= burn) return 0;
+  const ramp = 0.08 * burn;
+  if (t < ramp) return 1.35 * (t / ramp);
+  const f = (t - ramp) / (burn - ramp);
+  return 1.35 - 0.75 * f;
+}
+
+function integrateShape(burn) {
+  let s = 0;
+  const n = 2000;
+  const dt = burn / n;
+  for (let i = 0; i < n; i++) s += thrustShape(i * dt + dt / 2, burn) * dt;
+  return s;
+}
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+class FlightSim {
+  /**
+   * @param {object} profile  one of PROFILES
+   * @param {object} site     DEFAULT_SITE or edited copy
+   * @param {(frame: Uint8Array, meta: object) => void} onFrame
+   *        called for every frame the rocket transmits; meta.dropped tells
+   *        the caller to throw it away (simulated packet loss). The caller is
+   *        the "radio": it must not look inside the bytes here.
+   */
+  constructor(profile, site, onFrame) {
+    this.profile = profile;
+    this.site = { ...site };
+    this.onFrame = onFrame;
+    this.faults = {
+      packetLossPct: 0,
+      gpsDropout: false,
+      lowBattery: false,
+      baroGlitchPending: false,
+    };
+    /* Ground-test mode, entered over the radio with a two-step handshake.
+     * The flight computer is the authority: it refuses to enter while
+     * armed, drops out when armed, and times out on its own. */
+    this.testMode = false;
+    this.testToken = null;        /* random token issued at request time */
+    this.testPending = null;      /* token waiting for confirmation */
+    this.testExpiresAt = 0;       /* seconds since boot */
+    this.lastCommandResult = null;
+    this.telemetryHz = 5;
+    this.physicsDt = 0.005;
+    this.reset();
+  }
+
+  reset() {
+    const p = this.profile;
+    this.thrustScale = p.totalImpulse_Ns / integrateShape(p.burnTime_s);
+    this.cdA = this._tuneDrag();
+    this.t = 0;                    /* seconds since boot            */
+    this.tLaunch = null;           /* seconds since boot at liftoff */
+    this.alt = 0;                  /* m AGL                         */
+    this.vz = 0;
+    this.az = 0;                   /* proper vertical accel, m/s^2 (what the IMU feels) */
+    this.east = 0;                 /* m from pad                    */
+    this.north = 0;
+    this.mass = p.liftoffMass_kg;
+    this.state = STATE.PAD;
+    this.armed = false;
+    this.stateEntered = 0;
+    this.coastSince = null;
+    this.apogeeCandidateSince = null;
+    this.landedSince = null;
+    this.tilt = 1.5 + Math.random() * 1.5;
+    this.battery_v = 4.12;
+    this.pyroFired = 0;
+    this.counter = 0;
+    this.nextFrameAt = 0;
+    this.apogee = 0;
+    this.sats = 10;
+    this.gpsLagEast = 0;
+    this.gpsLagNorth = 0;
+    this.lastFrameHex = "";
+    this.landedFlag = false;
+  }
+
+  /* Bisection on Cd*A so the ascent reaches targetApogee. */
+  _tuneDrag() {
+    const target = this.profile.targetApogee_ft * FT;
+    let lo = 0.0005, hi = 0.05;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      if (this._dryRunApogee(mid) > target) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
+  _dryRunApogee(cdA) {
+    const p = this.profile;
+    let alt = 0, vz = 0, t = 0, mass = p.liftoffMass_kg;
+    const dt = 0.01;
+    const mdot = p.propellantMass_kg / p.burnTime_s;
+    while (t < 60) {
+      const thrust = this.thrustScale * thrustShape(t, p.burnTime_s);
+      if (t < p.burnTime_s) mass -= mdot * dt;
+      const rho = airDensity(this.site.padAltMsl_m + alt);
+      const drag = 0.5 * rho * vz * vz * cdA * Math.sign(vz);
+      const a = (thrust - drag) / mass - G;
+      vz += a * dt;
+      alt += vz * dt;
+      t += dt;
+      if (t > p.burnTime_s && vz < 0) return alt;
+    }
+    return alt;
+  }
+
+  arm(on) {
+    if (on && this.testMode) {
+      /* arming always wins: leave test mode first, then arm */
+      this._exitTest("armed");
+    }
+    if (this.state === STATE.PAD && on) {
+      this.armed = true;
+      this._enter(STATE.ARMED);
+    } else if (this.state === STATE.ARMED && !on) {
+      this.armed = false;
+      this._enter(STATE.PAD);
+    }
+  }
+
+  launch() {
+    if (this.state !== STATE.ARMED) return false;
+    this.tLaunch = this.t;
+    return true;
+  }
+
+  injectBaroGlitch() {
+    this.faults.baroGlitchPending = true;
+  }
+
+  /* ---- ground-test commands, as they will arrive over the radio ----
+   * Every command returns an acknowledgement object {ok, text, token?}.
+   * The real firmware sends the same thing back as an ack packet. */
+
+  static TEST_TIMEOUT_S = 300;
+
+  _ack(ok, text, extra = {}) {
+    this.lastCommandResult = text;
+    return { ok, text, ...extra };
+  }
+
+  /** Step 1 of the handshake: the rocket issues a one-time token. */
+  requestTestMode() {
+    if (this.armed || this.state !== STATE.PAD) return this._ack(false, "refused: not disarmed on pad");
+    if (this.testMode) return this._ack(true, "already in test mode", { token: this.testToken });
+    this.testPending = (Math.floor(Math.random() * 0xffff) + 1).toString(16).padStart(4, "0");
+    return this._ack(true, "token issued", { token: this.testPending });
+  }
+
+  /** Step 2: the ground station echoes the token back. Only then does test mode start. */
+  confirmTestMode(token) {
+    if (this.armed || this.state !== STATE.PAD) return this._ack(false, "refused: not disarmed on pad");
+    if (!this.testPending || token !== this.testPending) return this._ack(false, "refused: bad token");
+    this.testMode = true;
+    this.testToken = this.testPending;
+    this.testPending = null;
+    this.testExpiresAt = this.t + FlightSim.TEST_TIMEOUT_S;
+    return this._ack(true, "test mode on", { token: this.testToken });
+  }
+
+  exitTestMode() {
+    if (!this.testMode) return this._ack(true, "already in pad mode");
+    this._exitTest("ground station");
+    return this._ack(true, "test mode off");
+  }
+
+  _exitTest(reason) {
+    this.testMode = false;
+    this.testToken = null;
+    this.testPending = null;
+    this.lastCommandResult = `test mode off (${reason})`;
+  }
+
+  get testSecondsLeft() {
+    return this.testMode ? Math.max(0, this.testExpiresAt - this.t) : 0;
+  }
+
+  /**
+   * Fire command. Rocket-side checks: test mode on, token matches, still
+   * disarmed, channel wired and not already fired. The ground station's own
+   * hold-to-fire is a human safeguard; the rocket never relies on it.
+   */
+  groundFire(channel, token) {
+    if (!this.testMode) return this._ack(false, "refused: not in test mode");
+    if (token !== this.testToken) return this._ack(false, "refused: bad token");
+    if (this.armed || this.state !== STATE.PAD) return this._ack(false, "refused: not disarmed on pad");
+    if (channel < 0 || channel >= this.profile.pyroChannels) return this._ack(false, "refused: channel not wired");
+    if (this.pyroFired & (1 << channel)) return this._ack(false, "refused: already fired");
+    this.pyroFired |= 1 << channel;
+    return this._ack(true, `fired channel ${channel + 1}`);
+  }
+
+  /** Reset fired channels after a ground test, as if new matches were fitted. */
+  reloadPyro() {
+    if (this.state === STATE.PAD && !this.armed) this.pyroFired = 0;
+  }
+
+  _enter(s) {
+    this.state = s;
+    this.stateEntered = this.t;
+  }
+
+  get flightTime() {
+    return this.tLaunch === null ? 0 : this.t - this.tLaunch;
+  }
+
+  /** Advance simulated time by dt seconds (already multiplied by speed). */
+  step(dt) {
+    let remaining = dt;
+    while (remaining > 0) {
+      const h = Math.min(this.physicsDt, remaining);
+      this._physics(h);
+      this._stateMachine();
+      this.t += h;
+      remaining -= h;
+      if (this.testMode && this.t >= this.testExpiresAt) this._exitTest("timeout");
+      if (this.t >= this.nextFrameAt) {
+        this._transmit();
+        this.nextFrameAt += 1 / this.telemetryHz;
+      }
+    }
+  }
+
+  _physics(h) {
+    const p = this.profile;
+    const s = this.state;
+    const inFlight = s >= STATE.BOOST && s <= STATE.MAIN;
+    if (!inFlight && s !== STATE.ARMED) {
+      this.az = 0;
+      return;
+    }
+    if (s === STATE.ARMED) {
+      if (this.tLaunch !== null && this.t >= this.tLaunch) {
+        /* liftoff this step: the state machine will see the acceleration */
+      } else {
+        this.az = 0;
+        return;
+      }
+    }
+
+    const tf = this.tLaunch === null ? 0 : this.t - this.tLaunch;
+    const rho = airDensity(this.site.padAltMsl_m + this.alt);
+
+    let thrust = 0;
+    if (tf < p.burnTime_s) {
+      thrust = this.thrustScale * thrustShape(tf, p.burnTime_s);
+      this.mass -= (p.propellantMass_kg / p.burnTime_s) * h;
+    }
+
+    let cdA = this.cdA;
+    if (s === STATE.DROGUE || s === STATE.APOGEE && this.pyroFired & 1) {
+      cdA = (2 * this.mass * G) / (rho * p.drogueTerminal_mps ** 2);
+    } else if (s === STATE.MAIN) {
+      cdA = (2 * this.mass * G) / (rho * p.mainTerminal_mps ** 2);
+    }
+
+    const drag = 0.5 * rho * this.vz * this.vz * cdA * Math.sign(this.vz);
+    const aNet = (thrust - drag) / this.mass - G;
+    this.az = aNet + G; /* accelerometer reads thrust and drag, not gravity */
+    this.vz += aNet * h;
+    this.alt += this.vz * h;
+
+    if (this.alt <= 0 && this.vz < 0 && tf > 1) {
+      this.alt = 0;
+      this.vz = 0;
+    }
+
+    /* horizontal: weathercock a little into the wind on the way up,
+     * drift with the wind under canopy */
+    const windRad = ((this.site.windFromDeg + 180) % 360) * Math.PI / 180; /* direction wind blows TO */
+    const wE = this.site.windSpeed_mps * Math.sin(windRad);
+    const wN = this.site.windSpeed_mps * Math.cos(windRad);
+    let vE = 0, vN = 0;
+    if (s === STATE.BOOST || s === STATE.COAST) {
+      const k = 0.04; /* fraction of vertical speed, into the wind */
+      vE = -wE / this.site.windSpeed_mps * k * Math.abs(this.vz);
+      vN = -wN / this.site.windSpeed_mps * k * Math.abs(this.vz);
+    } else if (s === STATE.DROGUE || s === STATE.APOGEE) {
+      vE = wE * 0.9; vN = wN * 0.9;
+    } else if (s === STATE.MAIN) {
+      vE = wE; vN = wN;
+    }
+    this.east += vE * h;
+    this.north += vN * h;
+
+    if (this.alt > this.apogee) this.apogee = this.alt;
+
+    /* tilt: slow growth in coast, swinging under canopy */
+    if (s === STATE.BOOST) this.tilt += 0.4 * h;
+    else if (s === STATE.COAST) this.tilt += (3 + 40 * Math.max(0, 1 - Math.abs(this.vz) / 60)) * h;
+    else if (s === STATE.DROGUE || s === STATE.MAIN) {
+      this.tilt = 35 + 20 * Math.sin(this.t * 1.3) + 10 * Math.sin(this.t * 3.1);
+    }
+    this.tilt = clamp(this.tilt, 0, 180);
+
+    /* battery sag under load, slow drain */
+    this.battery_v -= 0.0004 * h;
+  }
+
+  _stateMachine() {
+    const s = this.state;
+    const tf = this.flightTime;
+    switch (s) {
+      case STATE.ARMED:
+        if (this.tLaunch !== null && this.t >= this.tLaunch && (this.az > 3 * G || this.vz > 10)) {
+          this._enter(STATE.BOOST);
+        }
+        break;
+      case STATE.BOOST:
+        if (tf > 0.5 && this.az < 0) {
+          if (this.coastSince === null) this.coastSince = this.t;
+          if (this.t - this.coastSince > 0.3) this._enter(STATE.COAST);
+        } else {
+          this.coastSince = null;
+        }
+        break;
+      case STATE.COAST:
+        if (this.vz < 0) {
+          if (this.apogeeCandidateSince === null) this.apogeeCandidateSince = this.t;
+          if (this.t - this.apogeeCandidateSince > 0.4) {
+            this._enter(STATE.APOGEE);
+            this.pyroFired |= 1; /* drogue channel */
+          }
+        } else {
+          this.apogeeCandidateSince = null;
+        }
+        break;
+      case STATE.APOGEE:
+        if (this.t - this.stateEntered > 1.0) this._enter(STATE.DROGUE);
+        break;
+      case STATE.DROGUE:
+        if (this.alt < this.profile.mainDeploy_ft * FT) {
+          this._enter(STATE.MAIN);
+          this.pyroFired |= 2; /* main channel */
+        }
+        break;
+      case STATE.MAIN:
+        if (this.alt < 15 && Math.abs(this.vz) < 1.0) {
+          if (this.landedSince === null) this.landedSince = this.t;
+          if (this.t - this.landedSince > 3) this._enter(STATE.LANDED);
+        } else {
+          this.landedSince = null;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  _gpsFromEN(east, north) {
+    const lat0 = this.site.padLat;
+    const dLat = north / 111320;
+    const dLon = east / (111320 * Math.cos(lat0 * Math.PI / 180));
+    return { lat: lat0 + dLat, lon: this.site.padLon + dLon };
+  }
+
+  _transmit() {
+    const p = this.profile;
+    const s = this.state;
+    const pkt = emptyPacket();
+    const f = this.faults;
+
+    pkt.counter = this.counter & 0xffff;
+    this.counter++;
+    pkt.time_ms = Math.round(this.t * 1000) >>> 0;
+    pkt.state = s;
+
+    /* sensors with noise */
+    let alt_m = this.alt + gauss(0.35);
+    if (f.baroGlitchPending) {
+      alt_m += 320;            /* one bogus sample, like a pressure port hit */
+      f.baroGlitchPending = false;
+    }
+    pkt.altitude_agl_cm = clamp(Math.round(alt_m * 100), -2147483648, 2147483647);
+    pkt.vertical_vel_cms = clamp(Math.round((this.vz + gauss(0.25)) * 100), -32768, 32767);
+
+    const azG = this.az / G;
+    const lateral = (s === STATE.DROGUE || s === STATE.MAIN) ? 0.25 : 0.03;
+    pkt.accel_x_mg = clamp(Math.round(gauss(lateral) * 1000), -32768, 32767);
+    pkt.accel_y_mg = clamp(Math.round(gauss(lateral) * 1000), -32768, 32767);
+    /* on the pad the z axis reads +1 g (gravity reaction) */
+    const zG = (s <= STATE.ARMED || s === STATE.LANDED) ? 1.0 : azG + 1.0;
+    pkt.accel_z_mg = clamp(Math.round((zG + gauss(0.02)) * 1000), -32768, 32767);
+
+    pkt.tilt_deg = clamp(Math.round(this.tilt + gauss(0.5)), 0, 180);
+
+    const vb = f.lowBattery ? 3.42 : this.battery_v;
+    pkt.battery_mv = Math.round((vb + gauss(0.004)) * 1000);
+
+    /* pyro: continuity on the channels that are wired, lost once fired */
+    let cont = 0;
+    for (let ch = 0; ch < p.pyroChannels; ch++) {
+      if (!(this.pyroFired & (1 << ch))) cont |= 1 << ch;
+    }
+    pkt.pyro_continuity = cont;
+    pkt.pyro_fired = this.pyroFired;
+
+    /* GPS: lags the truth a little, noisy, 3D fix unless dropped */
+    this.gpsLagEast += (this.east - this.gpsLagEast) * 0.6;
+    this.gpsLagNorth += (this.north - this.gpsLagNorth) * 0.6;
+    if (Math.random() < 0.05) this.sats = clamp(this.sats + (Math.random() < 0.5 ? -1 : 1), 7, 14);
+    if (f.gpsDropout) {
+      pkt.gps_fix = GPS_FIX.NONE;
+      pkt.gps_sats = Math.random() < 0.5 ? 0 : 1;
+      pkt.gps_lat_e7 = 0;
+      pkt.gps_lon_e7 = 0;
+      pkt.gps_alt_mm = 0;
+    } else {
+      const g = this._gpsFromEN(this.gpsLagEast + gauss(1.5), this.gpsLagNorth + gauss(1.5));
+      pkt.gps_fix = GPS_FIX.FIX_3D;
+      pkt.gps_sats = this.sats;
+      pkt.gps_lat_e7 = Math.round(g.lat * 1e7);
+      pkt.gps_lon_e7 = Math.round(g.lon * 1e7);
+      pkt.gps_alt_mm = Math.round((this.site.padAltMsl_m + this.alt + gauss(3)) * 1000);
+    }
+
+    let flags = FLAG.BARO_OK | FLAG.IMU_OK;
+    if (pkt.gps_fix === GPS_FIX.FIX_3D) flags |= FLAG.GPS_VALID;
+    if (this.armed) flags |= FLAG.ARMED;
+    if (vb < 3.5) flags |= FLAG.LOW_BATTERY;
+    if (s >= STATE.ARMED && s <= STATE.MAIN) flags |= FLAG.LOGGING;
+    if (this.testMode) flags |= FLAG.TEST_MODE;
+    pkt.flags = flags;
+
+    /* RSSI: the ground station writes this in before handing the frame to
+     * the UI. Here it is computed from the real geometry with noise. */
+    const dE = this.east - this.site.gsOffsetEast_m;
+    const dN = this.north - this.site.gsOffsetNorth_m;
+    const dist = Math.sqrt(dE * dE + dN * dN + this.alt * this.alt);
+    const rssi = -32 - 20 * Math.log10(Math.max(dist, 1)) + gauss(2.5);
+    pkt.rssi_dbm = clamp(Math.round(rssi), -128, 0);
+
+    const frame = encode(pkt);
+    const dropped = Math.random() * 100 < f.packetLossPct;
+    this.onFrame(frame, { dropped, simTime: this.t });
+  }
+
+  /* Truth values, for the simulator's own "truth" readout only. */
+  truth() {
+    return {
+      alt_m: this.alt, vz: this.vz, apogee_m: this.apogee,
+      east: this.east, north: this.north, state: this.state,
+      flightTime: this.flightTime, cdA: this.cdA,
+    };
+  }
+}
+
+
+/* ---- gs-ui.js ---- */
+/*
+ * gs-ui.js : the ground station's screens, written to be ported.
+ *
+ * Rules that keep this translatable to the ESP32 + TFT:
+ *   - Everything is drawn through Display, which only offers what a TFT
+ *     library (TFT_eSPI / LovyanGFX) offers: fill/draw rect, line, circle,
+ *     triangle, and text in a handful of fixed sizes. No CSS, no alpha,
+ *     no gradients, no DOM.
+ *   - Input is a button event model: onButton("select", "press"/"release").
+ *     Physical switches (key, cover) and the handheld's own sensors arrive
+ *     in the model each frame, the way GPIO reads will.
+ *   - The UI never talks to the simulator. It reads a model object the
+ *     host fills from the Receiver, and asks the host to do things
+ *     (fire, replay) through callbacks that will become radio commands.
+ *
+ * Screen is 480 x 320. Coordinates below are real pixels.
+ */
+
+/* ---- colours (RGB888 here, RGB565 on the chip) ----------------------- */
+const C = Object.freeze({
+  BLACK: "#000000", WHITE: "#ffffff", GREY: "#9a9a9a", DGREY: "#3a3a3a", DDGREY: "#1c1c1c",
+  GREEN: "#30d870", AMBER: "#ffb020", RED: "#ff4040", BLUE: "#58c4ff", PURPLE: "#c9a0ff",
+  ORANGE: "#ff7a40", DGREEN: "#0c3d20", DAMBER: "#3d2a00", DRED: "#3d0c0c",
+});
+
+const SCREENS = ["flight", "pad", "recovery", "post", "settings", "tests", "log"];
+const SCREEN_TITLE = { flight: "FLIGHT", pad: "PAD CHECK", recovery: "RECOVERY", post: "POST FLIGHT", settings: "SETTINGS", tests: "TESTS", log: "FLIGHT LOG" };
+
+const GS_STATE_NAMES = ["IDLE", "PAD", "ARMED", "BOOST", "COAST", "APOGEE", "DROGUE", "MAIN", "LANDED", "FAULT"];
+const STATE_BG = [C.GREY, C.GREY, C.AMBER, C.ORANGE, C.ORANGE, C.PURPLE, C.BLUE, C.BLUE, C.GREEN, C.RED];
+
+const FT_M = 0.3048;
+
+/* ====================================================================== */
+/* Display: a thin canvas wrapper shaped like a TFT library                */
+/* ====================================================================== */
+
+class Display {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.W = 480; this.H = 320;
+  }
+  _font(size, mono, bold) {
+    return `${bold ? "700" : "500"} ${size}px ${mono ? "'JetBrains Mono', Consolas, monospace" : "Barlow, Arial, sans-serif"}`;
+  }
+  fillScreen(c) { this.fillRect(0, 0, this.W, this.H, c); }
+  fillRect(x, y, w, h, c) { this.ctx.fillStyle = c; this.ctx.fillRect(x, y, w, h); }
+  drawRect(x, y, w, h, c) { this.ctx.strokeStyle = c; this.ctx.lineWidth = 1; this.ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
+  drawLine(x0, y0, x1, y1, c, w = 1) {
+    this.ctx.strokeStyle = c; this.ctx.lineWidth = w;
+    this.ctx.beginPath(); this.ctx.moveTo(x0, y0); this.ctx.lineTo(x1, y1); this.ctx.stroke();
+  }
+  drawCircle(x, y, r, c, w = 1) {
+    this.ctx.strokeStyle = c; this.ctx.lineWidth = w;
+    this.ctx.beginPath(); this.ctx.arc(x, y, r, 0, Math.PI * 2); this.ctx.stroke();
+  }
+  fillCircle(x, y, r, c) {
+    this.ctx.fillStyle = c; this.ctx.beginPath(); this.ctx.arc(x, y, r, 0, Math.PI * 2); this.ctx.fill();
+  }
+  fillTriangle(x0, y0, x1, y1, x2, y2, c) {
+    this.ctx.fillStyle = c; this.ctx.beginPath();
+    this.ctx.moveTo(x0, y0); this.ctx.lineTo(x1, y1); this.ctx.lineTo(x2, y2); this.ctx.closePath(); this.ctx.fill();
+  }
+  /** text(x, y, str, size, color, align) : y is the TOP of the text box */
+  text(x, y, str, size = 16, color = C.WHITE, align = "left", mono = false, bold = false) {
+    this.ctx.font = this._font(size, mono, bold);
+    this.ctx.fillStyle = color;
+    this.ctx.textAlign = align;
+    this.ctx.textBaseline = "top";
+    this.ctx.fillText(String(str), x, y);
+  }
+  textWidth(str, size = 16, mono = false, bold = false) {
+    this.ctx.font = this._font(size, mono, bold);
+    return this.ctx.measureText(String(str)).width;
+  }
+}
+
+/* ====================================================================== */
+/* Formatting helpers (duplicated on purpose: the chip will have its own)  */
+/* ====================================================================== */
+
+function fAlt(cm, imperial) {
+  const m = cm / 100;
+  return imperial ? [Math.round(m / FT_M).toLocaleString(), "ft"] : [Math.round(m).toLocaleString(), "m"];
+}
+function fSpeed(cms, imperial) {
+  const mps = cms / 100;
+  return imperial ? [Math.round(mps / FT_M).toLocaleString(), "ft/s"] : [mps.toFixed(1), "m/s"];
+}
+function fDist(m, imperial) {
+  if (imperial) {
+    const ft = m / FT_M;
+    return ft >= 5280 ? [(ft / 5280).toFixed(2), "mi"] : [Math.round(ft).toLocaleString(), "ft"];
+  }
+  return m >= 1000 ? [(m / 1000).toFixed(2), "km"] : [Math.round(m).toLocaleString(), "m"];
+}
+const pad3 = (n) => Math.round(n).toString().padStart(3, "0");
+
+/* ====================================================================== */
+/* The UI                                                                  */
+/* ====================================================================== */
+
+class GroundStationUI {
+  /**
+   * host callbacks (these become radio commands or local actions on the chip):
+   *   host.fire(channel) -> result string from the rocket
+   *   host.reloadPyro()
+   *   host.replay(index), host.stopReplay()
+   *   host.setProfile(id)
+   */
+  constructor(host) {
+    this.host = host;
+    this.screen = "flight";
+    this.cursor = 0;
+    this.editing = false;
+    this.settings = { imperial: true, channel: 3, power: 17, profile: "zafiro", brightness: 80 };
+    this.test = { phase: "idle", channel: 0, hold: 0, result: null, cursor: 0, lastAck: null, enteredAt: null, token: null };
+    this.selectDown = false;
+    this.toast = null;      /* {text, until} */
+    this.now = 0;
+    this.blink = false;
+  }
+
+  /* ---- input ---- */
+  onButton(name, action) {
+    if (action === "release") {
+      if (name === "select") {
+        this.selectDown = false;
+        if (this.test.phase === "hold") {
+          this.test.phase = "pick";
+          this.test.hold = 0;
+          this._toast("Aborted: released early");
+        }
+      }
+      return;
+    }
+    if (name === "select") this.selectDown = true;
+
+    if (name === "view") {
+      if (this.model && this.model.replay) return;  /* leave replay with BACK first */
+      const i = SCREENS.indexOf(this.screen);
+      this._go(SCREENS[(i + 1) % SCREENS.length]);
+      return;
+    }
+    switch (this.screen) {
+      case "settings": return this._settingsInput(name);
+      case "tests": return this._testsInput(name);
+      case "log": return this._logInput(name);
+      default:
+        if (name === "back") this._go("flight");
+    }
+  }
+
+  _go(screen) {
+    this.screen = screen;
+    this.cursor = 0;
+    this.editing = false;
+    if (this.test.phase !== "idle") { this.test.phase = "idle"; this.test.hold = 0; }
+  }
+
+  _toast(text, secs = 2.5) { this.toast = { text, until: this.now + secs }; }
+
+  /* ---- settings ---- */
+  _settingsItems() {
+    const s = this.settings;
+    return [
+      { key: "imperial", label: "Units", value: s.imperial ? "ft, ft/s" : "m, m/s", toggle: true },
+      { key: "profile", label: "Rocket profile", value: s.profile === "zafiro" ? "ZAFIRO I" : "RUBI", toggle: true },
+      { key: "channel", label: "LoRa channel", value: `${s.channel}  (${(902.3 + s.channel * 3.2).toFixed(1)} MHz)`, min: 0, max: 7 },
+      { key: "power", label: "TX power", value: `${s.power} dBm`, min: 10, max: 22 },
+      { key: "brightness", label: "Brightness", value: `${s.brightness} %`, min: 20, max: 100, step: 10 },
+    ];
+  }
+  _settingsInput(name) {
+    const items = this._settingsItems();
+    const locked = this.model && this.model.rx.armed;
+    if (name === "back") { if (this.editing) this.editing = false; else this._go("flight"); return; }
+    if (locked) { this._toast("Settings locked: rocket is armed"); return; }
+    if (!this.editing) {
+      if (name === "up") this.cursor = (this.cursor + items.length - 1) % items.length;
+      if (name === "down") this.cursor = (this.cursor + 1) % items.length;
+      if (name === "select") {
+        const it = items[this.cursor];
+        if (it.toggle) this._settingsChange(it, 1); else this.editing = true;
+      }
+    } else {
+      const it = items[this.cursor];
+      if (name === "up") this._settingsChange(it, 1);
+      if (name === "down") this._settingsChange(it, -1);
+      if (name === "select") this.editing = false;
+    }
+  }
+  _settingsChange(it, dir) {
+    const s = this.settings;
+    if (it.key === "imperial") s.imperial = !s.imperial;
+    else if (it.key === "profile") { s.profile = s.profile === "zafiro" ? "rubi" : "zafiro"; this.host.setProfile(s.profile); }
+    else {
+      const step = it.step || 1;
+      s[it.key] = Math.max(it.min, Math.min(it.max, s[it.key] + dir * step));
+    }
+  }
+
+  /* ---- tests ---- */
+  _testReady() {
+    const rx = this.model ? this.model.rx : null;
+    return !!(rx && rx.linked && rx.testMode && !rx.armed);
+  }
+  _enterTest() {
+    /* two-step handshake: request a token, echo it back. Both legs are
+     * radio commands with an ack; the rocket decides. */
+    const t = this.test;
+    const a1 = this.host.requestTestMode();
+    t.lastAck = a1.text;
+    if (!a1.ok) { this._toast(`Rocket: ${a1.text}`); return; }
+    const a2 = this.host.confirmTestMode(a1.token);
+    t.lastAck = a2.text;
+    if (!a2.ok) { this._toast(`Rocket: ${a2.text}`); return; }
+    t.token = a2.token;
+    t.enteredAt = this.now;
+    this._toast("Rocket: test mode on");
+  }
+  _exitTest() {
+    const a = this.host.exitTestMode();
+    this.test.lastAck = a.text;
+    this.test.token = null;
+    this._toast(`Rocket: ${a.text}`);
+  }
+  _testsInput(name) {
+    const t = this.test;
+    const rx = this.model ? this.model.rx : null;
+    if (name === "back") {
+      if (t.phase === "idle") this._go("flight");
+      else { t.phase = "idle"; t.hold = 0; }
+      return;
+    }
+    if (t.phase === "idle") {
+      if (name === "up" || name === "down") t.cursor = 1 - t.cursor;
+      if (name === "select") {
+        if (!rx || !rx.linked) { this._toast("No link to rocket"); return; }
+        if (t.cursor === 0) { rx.testMode ? this._exitTest() : this._enterTest(); return; }
+        if (!this._testReady()) { this._toast(rx.armed ? "Rocket is armed" : "Enter test mode first"); return; }
+        t.phase = "pick"; t.channel = 0; t.result = null;
+      }
+    } else if (t.phase === "pick") {
+      const n = rx.pyroChannels;
+      if (name === "up") t.channel = (t.channel + n - 1) % n;
+      if (name === "down") t.channel = (t.channel + 1) % n;
+      if (name === "select") {
+        if (!this._testReady()) { t.phase = "idle"; this._toast("Test mode lost"); return; }
+        t.phase = "hold"; t.hold = 0;
+      }
+    } else if (t.phase === "done") {
+      if (name === "select") { t.phase = "idle"; }
+      if (name === "up" || name === "down") { this.host.reloadPyro(); this._toast("Sim: new matches fitted"); }
+    }
+  }
+
+  /* ---- log ---- */
+  _logInput(name) {
+    const m = this.model;
+    const logs = m ? m.logs : [];
+    if (name === "back") {
+      if (m && m.replay) { this.host.stopReplay(); return; }
+      this._go("flight"); return;
+    }
+    if (!logs.length) return;
+    if (name === "up") this.cursor = (this.cursor + logs.length - 1) % logs.length;
+    if (name === "down") this.cursor = (this.cursor + 1) % logs.length;
+    if (name === "select" && !(m && m.replay)) this.host.replay(this.cursor);
+  }
+
+  /* ---- per-frame ---- */
+  update(dt, model) {
+    this.model = model;
+    this.now += dt;
+    this.blink = Math.floor(this.now * 2) % 2 === 0;
+    if (this.toast && this.now > this.toast.until) this.toast = null;
+    const t = this.test;
+    if (t.phase === "hold") {
+      if (!this._testReady()) { t.phase = "idle"; t.hold = 0; this._toast("Test mode lost, aborted"); return; }
+      if (this.selectDown) {
+        t.hold += dt;
+        if (t.hold >= 2.0) {
+          const a = this.host.fire(t.channel, t.token);
+          t.result = a;
+          t.lastAck = a.text;
+          t.phase = "done";
+          t.hold = 0;
+        }
+      }
+    }
+    /* the rocket reports its mode in every packet; if it dropped out, forget the token */
+    if (model && model.rx && !model.rx.testMode && t.token && t.enteredAt !== null && this.now - t.enteredAt > 2) {
+      t.token = null; t.enteredAt = null;   /* 2 s grace: the flag arrives with the next packet */
+    }
+  }
+
+  /* ================================================================== */
+  /* Rendering                                                           */
+  /* ================================================================== */
+
+  render(d) {
+    const m = this.model;
+    d.fillScreen(C.BLACK);
+    this._header(d);
+    switch (this.screen) {
+      case "flight": this._flight(d); break;
+      case "pad": this._pad(d); break;
+      case "recovery": this._recovery(d); break;
+      case "post": this._post(d); break;
+      case "settings": this._settings(d); break;
+      case "tests": this._tests(d); break;
+      case "log": this._log(d); break;
+    }
+    this._footer(d);
+    if (this.toast) {
+      d.fillRect(0, 40, 480, 26, C.AMBER);
+      d.text(240, 44, this.toast.text, 16, C.BLACK, "center", false, true);
+    }
+    if (m && m.replay) {
+      d.fillRect(400, 48, 76, 20, C.PURPLE);
+      d.text(438, 50, "REPLAY", 14, C.BLACK, "center", false, true);
+    }
+  }
+
+  _header(d) {
+    const m = this.model;
+    const rx = m ? m.rx : null;
+    const linked = rx && rx.linked;
+    d.fillRect(0, 0, 480, 40, C.DDGREY);
+    const bg = linked ? STATE_BG[rx.state] : C.DGREY;
+    d.fillRect(0, 0, 130, 40, bg);
+    d.text(65, 9, linked ? GS_STATE_NAMES[rx.state] : "NO LINK", 20, linked ? C.BLACK : C.GREY, "center", false, true);
+    d.text(140, 11, SCREEN_TITLE[this.screen], 16, C.GREY, "left", false, true);
+    /* link quality */
+    const x0 = 356;
+    const n = linked && rx.age < 3 ? (rx.rssi > -70 ? 5 : rx.rssi > -85 ? 4 : rx.rssi > -95 ? 3 : rx.rssi > -105 ? 2 : 1) : 0;
+    for (let i = 0; i < 5; i++) d.fillRect(x0 + i * 6, 28 - (i + 1) * 4, 4, (i + 1) * 4, i < n ? C.GREEN : C.DGREY);
+    d.text(392, 12, linked ? `${rx.rssi}` : "--", 14, C.GREY, "left", true);
+    const ageCol = !linked ? C.RED : rx.age > 2 ? C.RED : rx.age > 0.6 ? C.AMBER : C.GREY;
+    d.text(474, 12, linked ? `${rx.age.toFixed(1)}s` : "--", 14, ageCol, "right", true);
+    /* ground station's own battery in the corner */
+    const gs = m ? m.gs : null;
+    if (gs) {
+      d.text(345, 12, `${gs.battery.toFixed(2)}V`, 12, gs.battery < 3.5 ? C.RED : C.DGREY, "right", true);
+    }
+  }
+
+  _footer(d) {
+    d.fillRect(0, 296, 480, 24, C.DDGREY);
+    let hint;
+    switch (this.screen) {
+      case "settings": hint = this.editing ? "UP/DN change   SEL done   BACK cancel" : "UP/DN move   SEL edit   BACK exit   VIEW next"; break;
+      case "tests":
+        hint = this.test.phase === "idle" ? "UP/DN pick   SEL act   BACK flight   VIEW next"
+          : this.test.phase === "pick" ? "UP/DN channel   HOLD SEL 2 s to fire   BACK cancel"
+          : this.test.phase === "hold" ? "HOLD SEL 2 s to fire   release = abort"
+          : "SEL ok   UP/DN reload (sim)   BACK";
+        break;
+      case "log": hint = this.model && this.model.replay ? "BACK stop replay" : "UP/DN pick   SEL replay   VIEW next"; break;
+      default: hint = "VIEW next screen   BACK flight";
+    }
+    d.text(8, 300, hint, 13, C.GREY, "left");
+    d.text(472, 300, `${SCREENS.indexOf(this.screen) + 1}/${SCREENS.length}`, 13, C.DGREY, "right", true);
+  }
+
+  _bigValue(d, x, y, label, [v, u], valueSize = 64) {
+    d.text(x, y, label, 12, C.GREY, "left", false, true);
+    d.text(x, y + 16, v, valueSize, C.WHITE, "left", true, true);
+    const w = d.textWidth(v, valueSize, true, true);
+    d.text(x + w + 6, y + 16 + valueSize - 24, u, 18, C.GREY, "left");
+  }
+
+  _kv(d, x, y, label, value, color = C.WHITE, size = 18) {
+    d.text(x, y, label, 11, C.GREY, "left", false, true);
+    d.text(x, y + 13, value, size, color, "left", true);
+  }
+
+  /* ---- FLIGHT ---- */
+  _flight(d) {
+    const m = this.model, rx = m ? m.rx : null;
+    const imp = this.settings.imperial;
+    if (!rx || !rx.hasPacket) { d.text(240, 150, "waiting for telemetry", 18, C.GREY, "center"); return; }
+    d.drawLine(240, 40, 240, 200, C.DGREY);
+    d.drawLine(0, 200, 480, 200, C.DGREY);
+    this._bigValue(d, 12, 48, "ALTITUDE AGL", fAlt(rx.alt_cm, imp));
+    this._bigValue(d, 252, 48, "VERTICAL SPEED", fSpeed(rx.vz_cms, imp));
+    d.text(12, 150, `T+ ${Math.max(0, rx.flightTime).toFixed(1)}`, 22, C.WHITE, "left", true);
+    d.text(228, 152, `MAX ${fAlt(rx.maxAlt_cm, imp).join(" ")}`, 16, C.GREY, "right", true);
+    d.text(252, 152, `ACC ${rx.accel_g.toFixed(1)} g`, 16, C.GREY, "left", true);
+    d.text(468, 152, `TILT ${rx.tilt}°`, 16, C.GREY, "right", true);
+    /* bottom strip */
+    const cols = [0, 150, 268, 368];
+    d.drawLine(150, 200, 150, 296, C.DGREY); d.drawLine(268, 200, 268, 296, C.DGREY); d.drawLine(368, 200, 368, 296, C.DGREY);
+    this._kv(d, cols[0] + 10, 206, "ROCKET GPS", rx.fix ? `${rx.lat.toFixed(5)}` : "no fix", rx.fix ? C.WHITE : C.RED, 16);
+    d.text(cols[0] + 10, 240, rx.fix ? `${rx.lon.toFixed(5)}` : (rx.lastFixAge !== null ? `last ${rx.lastFixAge.toFixed(0)}s ago` : ""), 16, rx.fix ? C.WHITE : C.AMBER, "left", true);
+    d.text(cols[0] + 10, 262, rx.fix ? `3D  ${rx.sats} sats` : "", 14, C.GREY, "left", true);
+    const to = rx.toRocket;
+    this._kv(d, cols[1] + 10, 206, "DISTANCE", to ? fDist(to.dist, imp).join(" ") : "--", C.WHITE, 22);
+    d.text(cols[1] + 10, 250, to ? `brg ${pad3(to.brg)}°` : "", 16, C.GREY, "left", true);
+    const lp = rx.lossPct;
+    this._kv(d, cols[2] + 10, 206, "LINK", `${lp.toFixed(0)}% lost`, lp > 20 ? C.RED : lp > 5 ? C.AMBER : C.WHITE, 20);
+    d.text(cols[2] + 10, 250, `${rx.rateHz.toFixed(1)} Hz`, 14, C.GREY, "left", true);
+    d.text(cols[3] + 10, 206, "PYRO", 11, C.GREY, "left", false, true);
+    this._pyroBoxes(d, cols[3] + 10, 222, rx);
+    d.text(cols[3] + 10, 252, `BAT ${rx.battery_v.toFixed(2)} V`, 14, rx.battery_v < 3.5 ? C.RED : rx.battery_v < 3.7 ? C.AMBER : C.GREY, "left", true);
+    d.text(cols[3] + 10, 270, rx.armed ? "ARMED" : "disarmed", 14, rx.armed ? C.AMBER : C.GREY, "left", true, rx.armed);
+  }
+
+  _pyroBoxes(d, x, y, rx) {
+    for (let ch = 0; ch < 4; ch++) {
+      const fired = rx.pyroFired & (1 << ch), cont = rx.pyroCont & (1 << ch);
+      const bg = fired ? C.DAMBER : cont ? C.DGREEN : C.DDGREY;
+      const fg = fired ? C.AMBER : cont ? C.GREEN : C.DGREY;
+      d.fillRect(x + ch * 22, y, 20, 22, bg);
+      d.text(x + ch * 22 + 10, y + 4, `${ch + 1}`, 14, fg, "center", true, true);
+    }
+  }
+
+  /* ---- PAD ---- */
+  _pad(d) {
+    const rx = this.model ? this.model.rx : null;
+    const imp = this.settings.imperial;
+    const items = [];
+    if (!rx || !rx.hasPacket) items.push(["Telemetry link", "bad", "no packets"]);
+    else {
+      items.push(["Telemetry link", rx.age < 1.5 ? "ok" : "bad", rx.age < 1.5 ? `${rx.rssi} dBm  ${rx.rateHz.toFixed(1)} Hz` : "no packets"]);
+      items.push(["Battery", rx.battery_v > 3.7 ? "ok" : rx.battery_v > 3.5 ? "warn" : "bad", `${rx.battery_v.toFixed(2)} V`]);
+      items.push(["GPS fix", rx.fix && rx.sats >= 6 ? "ok" : rx.fix ? "warn" : "bad", rx.fix ? `3D  ${rx.sats} sats` : "no fix"]);
+      items.push(["Barometer", rx.baroOk ? "ok" : "bad", rx.baroOk ? `${fAlt(rx.alt_cm, imp).join(" ")} AGL` : "fault"]);
+      items.push(["IMU", rx.imuOk ? "ok" : "bad", rx.imuOk ? `${rx.accel_g.toFixed(2)} g  tilt ${rx.tilt}°` : "fault"]);
+      let contOk = true;
+      for (let ch = 0; ch < rx.pyroChannels; ch++) if (!(rx.pyroCont & (1 << ch))) contOk = false;
+      items.push(["Pyro continuity", contOk ? "ok" : "bad", contOk ? `ch 1 to ${rx.pyroChannels}` : "OPEN"]);
+      items.push(["Arm switch", rx.armed ? "ok" : "warn", rx.armed ? "ARMED" : "disarmed"]);
+    }
+    const bads = items.filter((i) => i[1] === "bad");
+    let verdict, vcol;
+    if (!rx || !rx.hasPacket) { verdict = "WAITING FOR TELEMETRY"; vcol = C.GREY; }
+    else if (bads.length) { verdict = `NO GO: ${bads.map((b) => b[0]).join(", ")}`; vcol = C.RED; }
+    else if (!rx.armed) { verdict = "ALL CHECKS PASS. READY TO ARM"; vcol = C.GREEN; }
+    else if (rx.state >= 3) { verdict = "IN FLIGHT"; vcol = C.GREEN; }
+    else { verdict = "GO FOR LAUNCH"; vcol = C.GREEN; }
+    d.fillRect(0, 44, 480, 30, vcol);
+    d.text(240, 50, verdict, 17, C.BLACK, "center", false, true);
+    let y = 82;
+    for (const [name, st, val] of items) {
+      const col = st === "ok" ? C.GREEN : st === "warn" ? C.AMBER : C.RED;
+      d.fillCircle(18, y + 10, 6, col);
+      d.text(34, y, name, 17, C.WHITE, "left");
+      d.text(468, y + 1, val, 16, st === "ok" ? C.WHITE : col, "right", true);
+      d.drawLine(10, y + 28, 470, y + 28, C.DDGREY);
+      y += 30;
+    }
+  }
+
+  /* ---- RECOVERY ---- */
+  _recovery(d) {
+    const m = this.model, rx = m ? m.rx : null, gs = m ? m.gs : null;
+    const imp = this.settings.imperial;
+    const cx = 128, cy = 164, R = 104;
+    const heading = gs ? gs.heading : 0;
+    const to = rx ? rx.toRocket : null;
+    d.drawCircle(cx, cy, R, C.DGREY, 2);
+    /* rotating dial: ticks and cardinals turn with the handheld */
+    for (let deg = 0; deg < 360; deg += 15) {
+      const a = (deg - heading - 90) * Math.PI / 180;
+      const major = deg % 90 === 0;
+      const r1 = major ? R - 16 : R - 8;
+      d.drawLine(cx + r1 * Math.cos(a), cy + r1 * Math.sin(a), cx + R * Math.cos(a), cy + R * Math.sin(a), major ? C.GREY : C.DGREY, major ? 3 : 2);
+      if (major) {
+        const L = ["N", "E", "S", "W"][deg / 90];
+        const rl = R - 30;
+        d.text(cx + rl * Math.cos(a), cy + rl * Math.sin(a) - 9, L, 18, L === "N" ? C.RED : C.GREY, "center", false, true);
+      }
+    }
+    /* heading mark at top: where the handheld points */
+    d.fillTriangle(cx - 8, cy - R - 2, cx + 8, cy - R - 2, cx, cy - R + 10, C.WHITE);
+    if (to) {
+      const a = (to.brg - heading - 90) * Math.PI / 180;
+      const tipX = cx + (R - 20) * Math.cos(a), tipY = cy + (R - 20) * Math.sin(a);
+      const bx = cx + 10 * Math.cos(a + Math.PI / 2), by = cy + 10 * Math.sin(a + Math.PI / 2);
+      const bx2 = cx + 10 * Math.cos(a - Math.PI / 2), by2 = cy + 10 * Math.sin(a - Math.PI / 2);
+      d.fillTriangle(tipX, tipY, bx, by, bx2, by2, C.AMBER);
+      d.fillCircle(cx, cy, 10, C.BLACK);
+      d.drawCircle(cx, cy, 10, C.AMBER, 2);
+      /* relative turn hint */
+      let rel = ((to.brg - heading) % 360 + 540) % 360 - 180;
+      const hint = Math.abs(rel) < 8 ? "AHEAD" : rel > 0 ? `TURN RIGHT ${Math.round(rel)}°` : `TURN LEFT ${Math.round(-rel)}°`;
+      d.text(cx, cy + R + 9, hint, 13, C.AMBER, "center", true, true);
+    } else {
+      d.text(cx, cy - 8, "NO FIX", 18, C.RED, "center", false, true);
+    }
+    /* right column */
+    const x = 262;
+    this._bigValue(d, x, 48, "DISTANCE TO ROCKET", to ? fDist(to.dist, imp) : ["--", ""], 52);
+    d.text(x, 126, to ? `BEARING ${pad3(to.brg)}°   HDG ${pad3(heading)}°` : `HDG ${pad3(heading)}°`, 15, C.GREY, "left", true);
+    if (rx && rx.lastFixLat !== null) {
+      this._kv(d, x, 152, "ROCKET LAST FIX", `${rx.lastFixLat.toFixed(5)}`, C.WHITE, 17);
+      d.text(x, 186, `${rx.lastFixLon.toFixed(5)}`, 17, C.WHITE, "left", true);
+      const ageTxt = rx.lastFixAge < 60 ? `${rx.lastFixAge.toFixed(0)} s ago` : `${(rx.lastFixAge / 60).toFixed(1)} min ago`;
+      d.text(x, 208, ageTxt, 14, rx.lastFixAge > 5 ? C.AMBER : C.GREY, "left", true);
+      d.text(x, 228, `rocket alt ${fAlt(rx.alt_cm, imp).join(" ")}`, 14, C.GREY, "left", true);
+      if (rx.hasPacket && !rx.fix) d.text(x, 243, "LIVE GPS LOST, using last fix", 12, C.RED, "left", false, true);
+    } else {
+      this._kv(d, x, 152, "ROCKET LAST FIX", "none received", C.RED, 16);
+    }
+    if (gs) {
+      d.text(x, 256, `GS GPS: ${gs.gpsFix ? `3D ${gs.gpsSats} sats` : "NO FIX"}`, 14, gs.gpsFix ? C.GREY : C.RED, "left", true);
+      d.text(x, 274, `compass ${gs.compassOk ? "ok" : "NOT CALIBRATED"}`, 14, gs.compassOk ? C.GREY : C.AMBER, "left", true);
+    }
+  }
+
+  /* ---- POST ---- */
+  _post(d) {
+    const rx = this.model ? this.model.rx : null;
+    const imp = this.settings.imperial;
+    if (!rx || !rx.hasFlight) { d.text(240, 150, "no flight yet", 18, C.GREY, "center"); return; }
+    const s = rx.stats;
+    const rows = [
+      ["APOGEE", s.apogee ? fAlt(s.apogee.alt_cm, imp).join(" ") : "--", "TIME TO APOGEE", s.apogee ? `${s.apogee.t.toFixed(1)} s` : "--"],
+      ["MAX SPEED", fSpeed(s.maxVz_cms, imp).join(" "), "MAX ACCEL", `${s.maxAccel_g.toFixed(1)} g`],
+      ["DROGUE DESCENT", s.drogue !== null ? fSpeed(s.drogue, imp).join(" ") : "--", "MAIN DESCENT", s.main !== null ? fSpeed(s.main, imp).join(" ") : "--"],
+      ["FLIGHT TIME", s.flightTime !== null ? `${s.flightTime.toFixed(1)} s` : "in progress", "DRIFT FROM PAD", s.drift !== null ? fDist(s.drift, imp).join(" ") : "--"],
+      ["PACKETS RX / LOST", `${s.rx} / ${s.lost}`, "RSSI AVG / MIN", s.rssiN ? `${s.rssiAvg.toFixed(0)} / ${s.rssiMin} dBm` : "--"],
+    ];
+    let y = 50;
+    for (const [l1, v1, l2, v2] of rows) {
+      this._kv(d, 14, y, l1, v1, C.WHITE, 22);
+      this._kv(d, 250, y, l2, v2, C.WHITE, 22);
+      d.drawLine(10, y + 44, 470, y + 44, C.DDGREY);
+      y += 48;
+    }
+    if (!s.landed) d.text(240, 280, "flight in progress, values update live", 12, C.AMBER, "center");
+  }
+
+  /* ---- SETTINGS ---- */
+  _settings(d) {
+    const items = this._settingsItems();
+    const locked = this.model && this.model.rx.armed;
+    if (locked) { d.fillRect(0, 44, 480, 24, C.DAMBER); d.text(240, 48, "LOCKED: rocket is armed", 14, C.AMBER, "center", false, true); }
+    let y = locked ? 76 : 56;
+    items.forEach((it, i) => {
+      const sel = i === this.cursor;
+      if (sel) d.fillRect(8, y - 4, 464, 36, this.editing ? C.DAMBER : C.DDGREY);
+      d.text(20, y + 4, it.label, 18, sel ? C.WHITE : C.GREY, "left");
+      const vcol = sel && this.editing ? C.AMBER : C.WHITE;
+      d.text(460, y + 5, it.value, 18, vcol, "right", true);
+      if (sel && this.editing) { d.text(300, y + 6, "<", 18, C.AMBER, "right", true, true); }
+      y += 40;
+    });
+    const gs = this.model ? this.model.gs : null;
+    if (gs) {
+      d.drawLine(10, 262, 470, 262, C.DDGREY);
+      d.text(20, 270, `Ground station GPS: ${gs.gpsFix ? `3D fix, ${gs.gpsSats} sats, ${gs.lat.toFixed(5)} ${gs.lon.toFixed(5)}` : "no fix"}`, 13, C.GREY, "left", true);
+    }
+  }
+
+  /* ---- TESTS ---- */
+  _tests(d) {
+    const m = this.model, rx = m ? m.rx : null;
+    const t = this.test;
+    d.text(14, 48, "CONTINUITY", 12, C.GREY, "left", false, true);
+    if (rx && rx.hasPacket) {
+      for (let ch = 0; ch < 4; ch++) {
+        const wired = ch < rx.pyroChannels;
+        const fired = rx.pyroFired & (1 << ch), cont = rx.pyroCont & (1 << ch);
+        const x = 14 + ch * 114;
+        const bg = fired ? C.DAMBER : cont ? C.DGREEN : wired ? C.DRED : C.DDGREY;
+        const fg = fired ? C.AMBER : cont ? C.GREEN : wired ? C.RED : C.DGREY;
+        d.fillRect(x, 64, 106, 40, bg);
+        if (t.phase !== "idle" && t.channel === ch) d.drawRect(x, 64, 106, 40, C.WHITE);
+        d.text(x + 8, 68, ch === 0 ? "1 DROGUE" : ch === 1 ? "2 MAIN" : `${ch + 1}`, 12, fg, "left", false, true);
+        d.text(x + 8, 83, fired ? "FIRED" : cont ? "CONT" : wired ? "OPEN" : "unused", 16, fg, "left", true, true);
+      }
+    } else {
+      d.text(14, 70, "no telemetry", 16, C.RED, "left");
+    }
+    /* mode panel */
+    const inTest = !!(rx && rx.linked && rx.testMode);
+    d.fillRect(14, 114, 452, 34, inTest ? C.DAMBER : C.DDGREY);
+    d.fillCircle(32, 131, 8, inTest ? C.AMBER : C.GREY);
+    let modeTxt = "FLIGHT COMPUTER: PAD MODE";
+    if (inTest) {
+      const left = t.enteredAt !== null ? Math.max(0, 300 - (this.now - t.enteredAt)) : null;
+      modeTxt = left !== null ? `FLIGHT COMPUTER: TEST MODE   ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")} left` : "FLIGHT COMPUTER: TEST MODE";
+    }
+    if (rx && rx.linked && rx.armed) modeTxt = "FLIGHT COMPUTER: ARMED";
+    if (rx && !rx.linked) modeTxt = "FLIGHT COMPUTER: NO LINK";
+    d.text(50, 122, modeTxt, 17, inTest ? C.AMBER : C.WHITE, "left", false, true);
+    if (t.lastAck) d.text(466, 150, `rocket: ${t.lastAck}`, 12, C.GREY, "right", true);
+
+    /* menu */
+    const items = [inTest ? "Exit test mode" : "Enter test mode", "Separation test"];
+    const ready = this._testReady();
+    let y = 170;
+    items.forEach((label, i) => {
+      const sel = t.phase === "idle" && i === t.cursor;
+      const enabled = i === 0 || ready;
+      if (sel) d.fillRect(14, y - 4, 452, 28, C.DDGREY);
+      d.text(26, y, label, 18, enabled ? (sel ? C.WHITE : C.GREY) : C.DGREY, "left");
+      if (i === 1 && !enabled) d.text(458, y + 2, rx && rx.armed ? "rocket armed" : "needs test mode", 13, C.DGREY, "right");
+      y += 30;
+    });
+
+    /* action area */
+    const ax = 14, ay = 232, aw = 452, ah = 56;
+    if (t.phase === "pick") {
+      d.fillRect(ax, ay, aw, ah, C.DAMBER);
+      d.text(240, ay + 8, `CHANNEL ${t.channel + 1}  ${t.channel === 0 ? "DROGUE" : t.channel === 1 ? "MAIN" : ""}`, 18, C.AMBER, "center", false, true);
+      d.text(240, ay + 32, "press and HOLD SEL for 2 s to fire, release aborts", 13, C.AMBER, "center");
+    } else if (t.phase === "hold") {
+      d.fillRect(ax, ay, aw, ah, C.DRED);
+      const frac = Math.min(1, t.hold / 2.0);
+      d.fillRect(ax, ay + ah - 10, aw * frac, 10, C.RED);
+      d.text(240, ay + 8, `FIRING CH ${t.channel + 1} IN ${(2.0 - t.hold).toFixed(1)} s`, 20, C.RED, "center", true, true);
+      d.text(240, ay + 32, "keep holding SEL, release to abort", 13, C.RED, "center");
+    } else if (t.phase === "done") {
+      const ok = t.result && t.result.ok;
+      d.fillRect(ax, ay, aw, ah, ok ? C.DAMBER : C.DRED);
+      d.text(240, ay + 8, `ROCKET SAYS: ${String(t.result ? t.result.text : "no answer").toUpperCase()}`, 18, ok ? C.AMBER : C.RED, "center", false, true);
+      d.text(240, ay + 32, ok ? "check the airframe, then SEL" : "SEL to dismiss", 13, ok ? C.AMBER : C.RED, "center");
+    } else {
+      d.text(240, ay + 20, inTest ? "test mode ends by itself in 5 min, or when armed" : "test mode is set over the radio, only while disarmed", 13, C.DGREY, "center");
+    }
+  }
+
+  /* ---- LOG ---- */
+  _log(d) {
+    const m = this.model;
+    const logs = m ? m.logs : [];
+    const imp = this.settings.imperial;
+    if (!logs.length) { d.text(240, 150, "no flights recorded this session", 16, C.GREY, "center"); return; }
+    d.text(14, 48, "#", 12, C.GREY, "left", false, true);
+    d.text(50, 48, "ROCKET", 12, C.GREY, "left", false, true);
+    d.text(200, 48, "APOGEE", 12, C.GREY, "left", false, true);
+    d.text(310, 48, "FLIGHT", 12, C.GREY, "left", false, true);
+    d.text(400, 48, "PACKETS", 12, C.GREY, "left", false, true);
+    let y = 68;
+    logs.forEach((l, i) => {
+      const sel = i === this.cursor;
+      if (sel) d.fillRect(8, y - 4, 464, 30, m.replay && m.replayIndex === i ? C.DAMBER : C.DDGREY);
+      const col = sel ? C.WHITE : C.GREY;
+      d.text(14, y, `${i + 1}`, 16, col, "left", true);
+      d.text(50, y, l.name, 16, col, "left");
+      d.text(200, y, l.apogee_cm !== null ? fAlt(l.apogee_cm, imp).join(" ") : "--", 16, col, "left", true);
+      d.text(310, y, l.duration !== null ? `${l.duration.toFixed(0)} s` : "partial", 16, col, "left", true);
+      d.text(400, y, `${l.frames}`, 16, col, "left", true);
+      y += 32;
+    });
+    if (m.sdPresent === false) d.text(240, 276, "no SD card: logs held in RAM only", 12, C.AMBER, "center");
+  }
+}
+
+
+/* ---- app.js ---- */
+/*
+ * app.js : Mission Control simulator UI.
+ *
+ * Two halves that never touch each other except through bytes:
+ *   - the simulator (FlightSim) produces 46-byte frames
+ *   - the Receiver decodes frames and keeps the ground-side picture
+ * Everything on the phone and ground station screens renders from the
+ * Receiver only. When the ESP32 ground station is real, the Receiver
+ * stays and FlightSim goes away.
+ */
+
+
+
+
+/* ====================================================================== */
+/* Receiver: the ground side                                              */
+/* ====================================================================== */
+
+class Receiver {
+  constructor() {
+    this.gs = { lat: 0, lon: 0 };   /* ground station's own position */
+    this.reset();
+  }
+
+  reset() {
+    this.last = null;
+    this.lastClock = null;        /* GS clock when the last good frame arrived */
+    this.rx = 0;
+    this.lost = 0;
+    this.crcErrors = 0;
+    this.expected = null;         /* next counter we expect */
+    this.history = [];            /* {t, alt_cm, vz_cms} for charts, flight time based */
+    this.recentClocks = [];       /* for Hz */
+    this.events = [];             /* {t, state, alt_cm} */
+    this.lastState = null;
+    this.launchTimeMs = null;     /* rocket time_ms at first boost frame */
+    this.apogee = null;           /* {alt_cm, t} */
+    this.maxAlt_cm = 0;
+    this.maxVz_cms = 0;
+    this.maxAccel_mg = 0;
+    this.drogue = { sum: 0, n: 0 };
+    this.main = { sum: 0, n: 0 };
+    this.lastFix = null;          /* {lat_e7, lon_e7, alt_mm, clock, time_ms} */
+    this.padFix = null;           /* first GPS fix while on pad */
+    this.landed = null;           /* {time_ms, lat_e7, lon_e7} */
+    this.rssi = { sum: 0, n: 0, min: 0 };
+    this.lastHex = "";
+    this.lastResult = "";
+    this.prevAlt = null;
+    this.rejectedSamples = 0;
+    this.track = [];              /* GPS fixes for the map, thinned */
+  }
+
+  /** Called by the radio layer with a received frame and the GS clock (s). */
+  feed(bytes, clock) {
+    const r = decode(bytes);
+    this.lastHex = toHex(bytes);
+    this.lastResult = r.ok ? "ok" : r.error;
+    if (!r.ok) {
+      this.crcErrors++;
+      return;
+    }
+    const p = r.packet;
+
+    /* packet loss from counter gaps */
+    if (this.expected !== null) {
+      const gap = (p.counter - this.expected + 65536) % 65536;
+      if (gap > 0 && gap < 1000) this.lost += gap;
+    }
+    this.expected = (p.counter + 1) & 0xffff;
+
+    this.rx++;
+    this.last = p;
+    this.lastClock = clock;
+    this.recentClocks.push(clock);
+    while (this.recentClocks.length && clock - this.recentClocks[0] > 2) this.recentClocks.shift();
+
+    /* RSSI stats */
+    this.rssi.sum += p.rssi_dbm; this.rssi.n++;
+    if (this.rssi.n === 1 || p.rssi_dbm < this.rssi.min) this.rssi.min = p.rssi_dbm;
+
+    /* flight bookkeeping */
+    if (p.state === STATE.BOOST && this.launchTimeMs === null) this.launchTimeMs = p.time_ms;
+    const inFlight = p.state >= STATE.BOOST && p.state <= STATE.LANDED;
+    if (p.state !== this.lastState) {
+      this.events.push({ t: this.flightTime(p.time_ms), state: p.state, alt_cm: p.altitude_agl_cm });
+      this.lastState = p.state;
+    }
+    /* Baro sanity check: a single sample that jumps further than the rocket
+     * could have moved since the previous packet is rejected from the
+     * statistics (it still shows on the live number). The flight computer
+     * does the same before it would ever fire a charge on it. */
+    let glitch = false;
+    if (this.prevAlt) {
+      const dt = Math.max(0.05, (p.time_ms - this.prevAlt.time_ms) / 1000);
+      const allowed_cm = 2000 + 1.5 * Math.abs(this.prevAlt.vz_cms) * dt + 6000 * dt; /* 20 m + 1.5x last speed + 60 m/s slack */
+      if (Math.abs(p.altitude_agl_cm - this.prevAlt.alt_cm) > allowed_cm) {
+        glitch = true;
+        this.rejectedSamples++;
+      }
+    }
+    if (!glitch) this.prevAlt = { time_ms: p.time_ms, alt_cm: p.altitude_agl_cm, vz_cms: p.vertical_vel_cms };
+
+    if (inFlight && this.launchTimeMs !== null && !glitch) {
+      const t = this.flightTime(p.time_ms);
+      this.history.push({ t, alt_cm: p.altitude_agl_cm, vz_cms: p.vertical_vel_cms });
+      if (this.history.length > 6000) this.history.shift();
+      if (p.altitude_agl_cm > this.maxAlt_cm) {
+        this.maxAlt_cm = p.altitude_agl_cm;
+        this.apogee = { alt_cm: p.altitude_agl_cm, t };
+      }
+      if (p.vertical_vel_cms > this.maxVz_cms) this.maxVz_cms = p.vertical_vel_cms;
+      const a = Math.hypot(p.accel_x_mg, p.accel_y_mg, p.accel_z_mg);
+      if (a > this.maxAccel_mg) this.maxAccel_mg = a;
+      if (p.state === STATE.DROGUE) { this.drogue.sum += p.vertical_vel_cms; this.drogue.n++; }
+      if (p.state === STATE.MAIN) { this.main.sum += p.vertical_vel_cms; this.main.n++; }
+    }
+
+    if (p.gps_fix === GPS_FIX.FIX_3D && (p.flags & FLAG.GPS_VALID)) {
+      this.lastFix = { lat_e7: p.gps_lat_e7, lon_e7: p.gps_lon_e7, alt_mm: p.gps_alt_mm, clock, time_ms: p.time_ms };
+      const lt = this.track[this.track.length - 1];
+      if (!lt || Math.abs(lt.lat_e7 - p.gps_lat_e7) + Math.abs(lt.lon_e7 - p.gps_lon_e7) > 300 || this.track.length === 0) {
+        this.track.push({ lat_e7: p.gps_lat_e7, lon_e7: p.gps_lon_e7, state: p.state });
+        if (this.track.length > 3000) this.track.shift();
+      }
+      if (p.state <= STATE.ARMED && this.padFix === null) this.padFix = { ...this.lastFix };
+      if (p.state === STATE.LANDED) this.landed = { time_ms: p.time_ms, ...this.lastFix };
+    } else if (p.state === STATE.LANDED && this.landed === null && this.lastFix) {
+      this.landed = { time_ms: p.time_ms, ...this.lastFix };
+    }
+  }
+
+  flightTime(time_ms) {
+    if (this.launchTimeMs === null) return 0;
+    return (time_ms - this.launchTimeMs) / 1000;
+  }
+
+  age(clock) {
+    return this.lastClock === null ? null : clock - this.lastClock;
+  }
+
+  rateHz() {
+    if (this.recentClocks.length < 2) return 0;
+    const span = this.recentClocks[this.recentClocks.length - 1] - this.recentClocks[0];
+    return span > 0 ? (this.recentClocks.length - 1) / span : 0;
+  }
+
+  lossPct() {
+    const total = this.rx + this.lost;
+    return total ? (100 * this.lost) / total : 0;
+  }
+
+  /** Distance (m) and bearing (deg) from the ground station to the last fix. */
+  toRocket() {
+    if (!this.lastFix) return null;
+    const lat1 = this.gs.lat * Math.PI / 180, lon1 = this.gs.lon * Math.PI / 180;
+    const lat2 = this.lastFix.lat_e7 / 1e7 * Math.PI / 180, lon2 = this.lastFix.lon_e7 / 1e7 * Math.PI / 180;
+    const dLat = lat2 - lat1, dLon = lon2 - lon1;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+    const dist = 2 * 6371000 * Math.asin(Math.sqrt(a));
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    const brg = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    return { dist, brg };
+  }
+}
+
+/* ====================================================================== */
+/* Units and formatting                                                    */
+/* ====================================================================== */
+
+let imperial = true;
+const M_PER_FT = 0.3048;
+
+const fmt = {
+  alt(cm) {                 /* -> [value, unit] */
+    const m = cm / 100;
+    return imperial ? [Math.round(m / M_PER_FT).toLocaleString(), "ft"] : [Math.round(m).toLocaleString(), "m"];
+  },
+  speed(cms) {
+    const mps = cms / 100;
+    return imperial ? [Math.round(mps / M_PER_FT).toLocaleString(), "ft/s"] : [mps.toFixed(1), "m/s"];
+  },
+  dist(m) {
+    if (imperial) {
+      const ft = m / M_PER_FT;
+      return ft >= 5280 ? [(ft / 5280).toFixed(2), "mi"] : [Math.round(ft).toLocaleString(), "ft"];
+    }
+    return m >= 1000 ? [(m / 1000).toFixed(2), "km"] : [Math.round(m).toLocaleString(), "m"];
+  },
+  deg(e7) { return (e7 / 1e7).toFixed(6); },
+  secs(s) { return s.toFixed(1); },
+  latlon(lat_e7, lon_e7) {
+    const lat = lat_e7 / 1e7, lon = lon_e7 / 1e7;
+    return `${Math.abs(lat).toFixed(5)}${lat >= 0 ? "N" : "S"} ${Math.abs(lon).toFixed(5)}${lon >= 0 ? "E" : "W"}`;
+  },
+};
+
+function setBig(el, [v, u]) {
+  el.innerHTML = `${v}<small>${u}</small>`;
+}
+
+const STATE_COLOR = {
+  [STATE.IDLE]: "var(--st-pad)", [STATE.PAD]: "var(--st-pad)", [STATE.ARMED]: "var(--st-armed)",
+  [STATE.BOOST]: "var(--st-boost)", [STATE.COAST]: "var(--st-coast)", [STATE.APOGEE]: "var(--st-apogee)",
+  [STATE.DROGUE]: "var(--st-descent)", [STATE.MAIN]: "var(--st-descent)", [STATE.LANDED]: "var(--st-landed)",
+  [STATE.FAULT]: "var(--st-fault)",
+};
+
+const $ = (id) => document.getElementById(id);
+
+function setBars(container, rssi, age) {
+  const bars = container.querySelectorAll("i");
+  let n = 0;
+  if (rssi !== null && age !== null && age < 3) {
+    n = rssi > -70 ? 5 : rssi > -85 ? 4 : rssi > -95 ? 3 : rssi > -105 ? 2 : 1;
+  }
+  bars.forEach((b, i) => b.classList.toggle("on", i < n));
+}
+
+function setAge(el, age) {
+  el.classList.remove("stale", "lost");
+  if (age === null) { el.textContent = "no link"; el.classList.add("lost"); return; }
+  el.textContent = `${age.toFixed(1)} s`;
+  if (age > 2) el.classList.add("lost");
+  else if (age > 0.6) el.classList.add("stale");
+}
+
+/* ====================================================================== */
+/* Chart: altitude vs flight time                                          */
+/* ====================================================================== */
+
+function drawChart(canvas, history, opts = {}) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+    canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = cssW, H = cssH;
+  const cs = getComputedStyle(document.documentElement);
+  const colLine = cs.getPropertyValue("--line").trim();
+  const colMuted = cs.getPropertyValue("--muted").trim();
+  const colData = cs.getPropertyValue("--data").trim();
+  const colBg = cs.getPropertyValue("--bg").trim();
+  const padL = 44, padR = 10, padT = 10, padB = 22;
+
+  ctx.fillStyle = colBg;
+  ctx.fillRect(0, 0, W, H);
+
+  if (history.length < 2) {
+    ctx.fillStyle = colMuted;
+    ctx.font = "12px Barlow, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(opts.emptyText || "Altitude graph starts at liftoff", W / 2, H / 2 + 4);
+    return;
+  }
+
+  const toUnit = (cm) => imperial ? cm / 100 / M_PER_FT : cm / 100;
+  const tMax = Math.max(history[history.length - 1].t, 10);
+  let aMax = 0;
+  for (const h of history) aMax = Math.max(aMax, toUnit(h.alt_cm));
+  aMax = niceCeil(aMax * 1.08 || 100);
+  const x = (t) => padL + (t / tMax) * (W - padL - padR);
+  const y = (a) => padT + (1 - a / aMax) * (H - padT - padB);
+
+  /* grid */
+  ctx.strokeStyle = colLine; ctx.lineWidth = 1;
+  ctx.fillStyle = colMuted; ctx.font = "10px 'JetBrains Mono', monospace"; ctx.textAlign = "right";
+  const yTicks = 4;
+  for (let i = 0; i <= yTicks; i++) {
+    const a = (aMax / yTicks) * i;
+    ctx.beginPath(); ctx.moveTo(padL, y(a)); ctx.lineTo(W - padR, y(a)); ctx.stroke();
+    ctx.fillText(Math.round(a).toLocaleString(), padL - 6, y(a) + 3);
+  }
+  ctx.textAlign = "center";
+  const tStep = niceStep(tMax / 5);
+  for (let t = 0; t <= tMax; t += tStep) {
+    ctx.fillText(`${Math.round(t)}s`, x(t), H - 6);
+  }
+
+  /* area + line */
+  ctx.beginPath();
+  ctx.moveTo(x(history[0].t), y(Math.max(0, toUnit(history[0].alt_cm))));
+  for (const h of history) ctx.lineTo(x(h.t), y(Math.max(0, toUnit(h.alt_cm))));
+  ctx.lineTo(x(history[history.length - 1].t), y(0));
+  ctx.lineTo(x(history[0].t), y(0));
+  ctx.closePath();
+  ctx.fillStyle = hexToRgba(colData, 0.14);
+  ctx.fill();
+
+  ctx.beginPath();
+  for (let i = 0; i < history.length; i++) {
+    const h = history[i];
+    const px = x(h.t), py = y(Math.max(0, toUnit(h.alt_cm)));
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = colData; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+
+  /* endpoint */
+  const lastP = history[history.length - 1];
+  ctx.beginPath(); ctx.arc(x(lastP.t), y(Math.max(0, toUnit(lastP.alt_cm))), 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = colData; ctx.fill();
+
+  /* apogee marker */
+  if (opts.apogee) {
+    const ax = x(opts.apogee.t), ay = y(toUnit(opts.apogee.alt_cm));
+    ctx.strokeStyle = colMuted; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, y(0)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = colMuted; ctx.textAlign = ax > W / 2 ? "right" : "left";
+    ctx.fillText(`apogee ${Math.round(toUnit(opts.apogee.alt_cm)).toLocaleString()} ${imperial ? "ft" : "m"} @ ${opts.apogee.t.toFixed(1)}s`, ax + (ax > W / 2 ? -6 : 6), ay + 12);
+  }
+}
+
+function niceCeil(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / p;
+  const m = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+  return m * p;
+}
+function niceStep(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+}
+function hexToRgba(hex, a) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/* ====================================================================== */
+/* Simulator wiring                                                        */
+/* ====================================================================== */
+
+const liveReceiver = new Receiver();
+let receiver = liveReceiver;        /* swapped to a replay receiver during replay */
+let sim = null;
+
+/* ground station hardware the UI cannot see directly: switches and sensors */
+const gsHardware = { heading: 0, battery: 3.93 };
+let gsui = null;
+let gsDisplay = null;
+
+/* flight logs: every frame the ground station received, per flight */
+const flightLogs = [];
+let recording = null;              /* {name, frames:[{clock, bytes}], apogee_cm, duration} */
+let replay = null;                 /* {index, clock, next} */
+let profile = PROFILES.zafiro;
+let site = { ...DEFAULT_SITE };
+let speed = 1;
+let paused = false;
+let launched = false;
+let currentTab = "pad";
+let recoveryMode = "compass";
+let autoTabDone = { flight: false, recovery: false };
+let lastRender = 0;
+
+function readSite() {
+  site = {
+    ...DEFAULT_SITE,
+    padLat: parseFloat($("pad-lat").value) || DEFAULT_SITE.padLat,
+    padLon: parseFloat($("pad-lon").value) || DEFAULT_SITE.padLon,
+    windSpeed_mps: Math.max(0, parseFloat($("wind-spd").value) || 0),
+    windFromDeg: ((parseFloat($("wind-dir").value) || 0) + 360) % 360,
+    gsOffsetEast_m: parseFloat($("gs-e").value) || 0,
+    gsOffsetNorth_m: parseFloat($("gs-n").value) || 0,
+  };
+  /* the ground station knows its own position from its own GPS */
+  receiver.gs.lat = site.padLat + site.gsOffsetNorth_m / 111320;
+  receiver.gs.lon = site.padLon + site.gsOffsetEast_m / (111320 * Math.cos(site.padLat * Math.PI / 180));
+}
+
+function onFrame(frame, meta) {
+  if (meta.dropped) return;           /* the radio never saw it */
+  liveReceiver.feed(frame, meta.simTime);
+  if (recording) {
+    recording.frames.push({ clock: meta.simTime, bytes: frame });
+    const p = liveReceiver.last;
+    if (p) {
+      if (p.altitude_agl_cm > (recording.apogee_cm || 0) && liveReceiver.launchTimeMs !== null) recording.apogee_cm = liveReceiver.maxAlt_cm;
+      const landEv = liveReceiver.events.find((e) => e.state === STATE.LANDED);
+      if (landEv && recording.duration === null) recording.duration = landEv.t;
+      if (landEv && meta.simTime - recording.frames[recording.frames.length - 1].clock > 0) {
+        /* keep recording 10 s after landing, then close the log */
+        if (recording.closeAt === null) recording.closeAt = meta.simTime + 10;
+        if (meta.simTime >= recording.closeAt) recording = null;
+      }
+    }
+  }
+}
+
+function startRecording() {
+  recording = { name: profile.name, frames: [], apogee_cm: null, duration: null, closeAt: null };
+  flightLogs.push(recording);
+}
+
+/* ---- replay: feed a stored log through a fresh receiver at 5x ---- */
+function startReplay(index) {
+  const log = flightLogs[index];
+  if (!log || !log.frames.length) return;
+  paused = true;
+  $("btn-pause").textContent = "Resume";
+  const rr = new Receiver();
+  rr.gs.lat = liveReceiver.gs.lat; rr.gs.lon = liveReceiver.gs.lon;
+  receiver = rr;
+  replay = { index, clock: log.frames[0].clock, next: 0, log };
+}
+function stopReplay() {
+  replay = null;
+  receiver = liveReceiver;
+}
+function stepReplay(dt) {
+  if (!replay) return;
+  replay.clock += dt * 5;
+  const fr = replay.log.frames;
+  while (replay.next < fr.length && fr[replay.next].clock <= replay.clock) {
+    receiver.feed(fr[replay.next].bytes, fr[replay.next].clock);
+    replay.next++;
+  }
+}
+
+function resetSim() {
+  readSite();
+  sim = new FlightSim(profile, site, onFrame);
+  sim.faults.packetLossPct = parseInt($("loss").value, 10);
+  sim.faults.gpsDropout = $("f-gps").checked;
+  sim.faults.lowBattery = $("f-batt").checked;
+  if (replay) stopReplay();
+  liveReceiver.reset();
+  if (recording && recording.frames.length === 0) flightLogs.pop();
+  recording = null;
+  launched = false;
+  paused = false;
+  if (gsui) { gsui.settings.profile = profile.id; gsui.test.phase = "idle"; }
+  autoTabDone = { flight: false, recovery: false };
+  $("btn-arm").textContent = "Arm";
+  $("btn-arm").classList.remove("on");
+  $("btn-arm").disabled = false;
+  $("btn-launch").disabled = true;
+  $("btn-pause").textContent = "Pause";
+  $("profile-title").textContent = `${profile.name} simulator`;
+  $("ph-title").textContent = profile.name;
+  showTab("pad");
+  renderAll(true);
+}
+
+function showTab(name) {
+  currentTab = name;
+  for (const t of ["pad", "flight", "recovery", "post"]) {
+    $(`tab-${t}`).hidden = t !== name;
+  }
+  $("phone-tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
+}
+
+/* ---- main loop ---- */
+let lastTs = null;
+function loop(ts) {
+  if (lastTs === null) lastTs = ts;
+  let dt = Math.min(0.1, (ts - lastTs) / 1000);
+  lastTs = ts;
+  if (!paused && sim) sim.step(dt * speed);
+  if (replay) stepReplay(dt);
+  gsui.update(dt, buildGSModel(replay ? replay.clock : (sim ? sim.t : 0)));
+  if (ts - lastRender > 50) {
+    renderAll(false);
+    lastRender = ts;
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ====================================================================== */
+/* Rendering                                                               */
+/* ====================================================================== */
+
+function renderAll(force) {
+  const clock = replay ? replay.clock : (sim ? sim.t : 0);
+  const p = receiver.last;
+  const age = receiver.age(clock);
+
+  /* sim status */
+  $("sim-clock").textContent = `T ${clock.toFixed(1)} s`;
+  const pill = $("sim-pill");
+  pill.classList.toggle("live", !paused && launched);
+  pill.classList.toggle("paused", paused);
+  $("sim-pill-text").textContent = paused ? "Paused" : launched ? `In flight ${speed}x` : "On pad";
+  if (p && p.state === STATE.LANDED && !paused) $("sim-pill-text").textContent = "Landed";
+
+  /* auto tab switching, like the real app will do */
+  if (p) {
+    if (p.state === STATE.BOOST && !autoTabDone.flight) { autoTabDone.flight = true; showTab("flight"); }
+    if (p.state === STATE.LANDED && !autoTabDone.recovery) { autoTabDone.recovery = true; showTab("recovery"); }
+  }
+
+  renderRaw();
+  renderPhone(p, age, clock);
+  renderGS();
+}
+
+function renderRaw() {
+  const hex = receiver.lastHex;
+  if (!hex) return;
+  const h = TELEMETRY_HEADER_SIZE * 2, pl = TELEMETRY_PAYLOAD_SIZE * 2;
+  const head = hex.slice(0, h), body = hex.slice(h, h + pl), crc = hex.slice(h + pl);
+  const spaced = body.match(/.{1,8}/g).join(" ");
+  $("raw-hex").innerHTML = `<b>${head}</b> ${spaced} <i>${crc}</i>` + (receiver.lastResult !== "ok" ? ` <span style="color:var(--bad)">rejected: ${receiver.lastResult}</span>` : "");
+  $("m-rx").textContent = receiver.rx;
+  $("m-lost").textContent = receiver.lost;
+  $("m-lost").parentElement.classList.toggle("bad", receiver.lost > 0);
+  $("m-crc").textContent = receiver.crcErrors;
+  $("m-rate").textContent = receiver.rateHz().toFixed(1);
+}
+
+function stateLabel(p) {
+  return p ? stateName(p.state) : "no link";
+}
+
+function renderPhone(p, age, clock) {
+  const statePill = $("ph-state");
+  statePill.textContent = stateLabel(p);
+  statePill.style.background = p ? STATE_COLOR[p.state] : "var(--faint)";
+  $("unit-btn").textContent = imperial ? "ft" : "m";
+
+  const rssi = p ? p.rssi_dbm : null;
+  for (const id of ["ph", "fl", "rc"]) {
+    setBars($(`${id}-bars`), rssi, age);
+    setAge($(`${id}-age`), age);
+  }
+  $("ph-rssi").textContent = rssi === null ? "-- dBm" : `${rssi} dBm`;
+  $("rc-rssi").textContent = $("ph-rssi").textContent;
+
+  if (currentTab === "pad") renderPad(p, age);
+  if (currentTab === "flight") renderFlight(p);
+  if (currentTab === "recovery") renderRecovery(p, clock);
+  if (currentTab === "post") renderPost(p);
+}
+
+function renderPad(p, age) {
+  const items = [];
+  const push = (name, status, val) => items.push({ name, status, val });
+  if (!p) {
+    push("Telemetry link", "bad", "no packets");
+  } else {
+    const linkOk = age !== null && age < 1.5;
+    push("Telemetry link", linkOk ? "ok" : "bad", linkOk ? `${p.rssi_dbm} dBm, ${receiver.rateHz().toFixed(1)} Hz` : "no packets");
+    const v = p.battery_mv / 1000;
+    push("Battery", v > 3.7 ? "ok" : v > 3.5 ? "warn" : "bad", `${v.toFixed(2)} V`);
+    const gpsOk = p.gps_fix === GPS_FIX.FIX_3D && p.gps_sats >= 6;
+    push("GPS fix", gpsOk ? "ok" : p.gps_fix ? "warn" : "bad", p.gps_fix === 3 ? `3D, ${p.gps_sats} sats` : p.gps_fix === 2 ? `2D, ${p.gps_sats} sats` : "no fix");
+    push("Barometer", p.flags & FLAG.BARO_OK ? "ok" : "bad", (p.flags & FLAG.BARO_OK) ? `${fmt.alt(p.altitude_agl_cm).join(" ")} AGL` : "fault");
+    push("IMU", p.flags & FLAG.IMU_OK ? "ok" : "bad", (p.flags & FLAG.IMU_OK) ? `${(p.accel_z_mg / 1000).toFixed(2)} g, tilt ${p.tilt_deg}°` : "fault");
+    const wired = profile.pyroChannels;
+    let contOk = true;
+    for (let ch = 0; ch < wired; ch++) if (!(p.pyro_continuity & (1 << ch))) contOk = false;
+    push("Pyro continuity", contOk ? "ok" : "bad", contOk ? `channels 1 to ${wired}` : "open circuit");
+    const armed = !!(p.flags & FLAG.ARMED);
+    push("Arm switch", armed ? "ok" : "warn", armed ? "ARMED" : "disarmed");
+  }
+  $("checklist").innerHTML = items.map((i) =>
+    `<div class="check-item"><span class="ind ${i.status}"></span><span class="name">${i.name}</span><span class="val ${i.status === "ok" ? "hi" : ""}">${i.val}</span></div>`
+  ).join("");
+
+  const summary = $("pad-summary");
+  const bads = items.filter((i) => i.status === "bad");
+  const armed = p && (p.flags & FLAG.ARMED);
+  summary.classList.remove("go", "nogo");
+  if (!p) { summary.textContent = "Waiting for telemetry"; summary.classList.add("nogo"); }
+  else if (bads.length) { summary.textContent = `NO GO: ${bads.map((b) => b.name.toLowerCase()).join(", ")}`; summary.classList.add("nogo"); }
+  else if (!armed) { summary.textContent = "All checks pass. Ready to arm."; summary.classList.add("go"); }
+  else if (p.state >= STATE.BOOST) { summary.textContent = "In flight"; summary.classList.add("go"); }
+  else { summary.textContent = "GO for launch"; summary.classList.add("go"); }
+
+  /* pyro grid */
+  const cells = [];
+  for (let ch = 0; ch < 4; ch++) {
+    const wired = ch < profile.pyroChannels;
+    const cont = p && (p.pyro_continuity & (1 << ch));
+    const fired = p && (p.pyro_fired & (1 << ch));
+    const cls = fired ? "fired" : cont ? "cont" : "open";
+    const txt = fired ? "FIRED" : cont ? "CONT" : wired ? "OPEN" : "unused";
+    const label = ch === 0 ? "1 drogue" : ch === 1 ? "2 main" : `${ch + 1}`;
+    cells.push(`<div class="pyro ${cls}"><div class="ch">${label}</div><div class="st">${txt}</div></div>`);
+  }
+  $("pyro-row").innerHTML = cells.join("");
+
+  const c = $("pad-coords");
+  if (p && p.gps_fix === GPS_FIX.FIX_3D) {
+    c.innerHTML = `<span>Lat</span><span>${fmt.deg(p.gps_lat_e7)}</span><span>Lon</span><span>${fmt.deg(p.gps_lon_e7)}</span><span>MSL</span><span>${fmt.alt(p.gps_alt_mm / 10).join(" ")}</span>`;
+  } else {
+    c.innerHTML = `<span>GPS</span><span style="color:var(--muted)">waiting for fix</span>`;
+  }
+}
+
+function renderFlight(p) {
+  if (!p) return;
+  const t = receiver.flightTime(p.time_ms);
+  $("fl-tplus").innerHTML = `T+ <b>${Math.max(0, t).toFixed(1)}</b> s`;
+  setBig($("fl-alt"), fmt.alt(p.altitude_agl_cm));
+  setBig($("fl-vz"), fmt.speed(p.vertical_vel_cms));
+  setBig($("fl-max"), fmt.alt(receiver.maxAlt_cm));
+  const acc = Math.hypot(p.accel_x_mg, p.accel_y_mg, p.accel_z_mg) / 1000;
+  setBig($("fl-acc"), [acc.toFixed(1), "g"]);
+  setBig($("fl-tilt"), [p.tilt_deg, "°"]);
+  const bEl = $("fl-batt");
+  setBig(bEl, [(p.battery_mv / 1000).toFixed(2), "V"]);
+  bEl.classList.toggle("warn", p.battery_mv < 3700 && p.battery_mv >= 3500);
+  bEl.classList.toggle("bad", p.battery_mv < 3500);
+  drawChart($("fl-chart"), receiver.history, { apogee: p.state >= STATE.APOGEE ? receiver.apogee : null });
+  renderLog($("fl-log"));
+}
+
+function renderLog(el) {
+  const ev = receiver.events.filter((e) => e.state >= STATE.BOOST);
+  if (!ev.length) { el.innerHTML = `<div class="empty">No launch yet</div>`; return; }
+  el.innerHTML = ev.map((e) => {
+    const [v, u] = fmt.alt(e.alt_cm);
+    return `<div><span class="t">T+${e.t.toFixed(1)}s</span><span>${stateName(e.state)}</span><span class="a">${v} ${u}</span></div>`;
+  }).join("");
+}
+
+function renderRecovery(p, clock) {
+  const to = receiver.toRocket();
+  const svg = $("compass");
+  svg.classList.toggle("nofix", !to);
+  if (to) {
+    $("needle").setAttribute("transform", `rotate(${to.brg.toFixed(1)} 120 120)`);
+    const [dv, du] = fmt.dist(to.dist);
+    $("cmp-dist").textContent = dv;
+    $("cmp-unit").textContent = du.toUpperCase();
+    $("cmp-brg").textContent = `${Math.round(to.brg).toString().padStart(3, "0")}°`;
+  } else {
+    $("cmp-dist").textContent = "--";
+    $("cmp-brg").textContent = "---°";
+  }
+  const c = $("rc-coords");
+  const f = receiver.lastFix;
+  if (f) {
+    c.innerHTML = `<span>Lat</span><span>${fmt.deg(f.lat_e7)}</span><span>Lon</span><span>${fmt.deg(f.lon_e7)}</span><span>MSL</span><span>${fmt.alt(f.alt_mm / 10).join(" ")}</span>`;
+    const fixAge = clock - f.clock;
+    const fa = $("rc-fixage");
+    fa.textContent = fixAge < 60 ? `${fixAge.toFixed(0)} s ago` : `${(fixAge / 60).toFixed(1)} min ago`;
+    fa.classList.toggle("warn", fixAge > 5);
+  } else {
+    c.innerHTML = `<span>GPS</span><span style="color:var(--muted)">no fix received yet</span>`;
+    $("rc-fixage").textContent = "--";
+  }
+  if (p) setBig($("rc-alt"), fmt.alt(p.altitude_agl_cm));
+  $("cmp-note").textContent = to && to.dist < 15
+    ? "You are at the rocket."
+    : "North-up. Bearing is from the ground station to the rocket's last GPS fix.";
+  if (recoveryMode === "map") drawMap($("rc-map"));
+  const links = $("map-links");
+  if (f) {
+    const lat = (f.lat_e7 / 1e7).toFixed(6), lon = (f.lon_e7 / 1e7).toFixed(6);
+    $("link-apple").href = `https://maps.apple.com/?ll=${lat},${lon}&q=Rocket`;
+    $("link-google").href = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+    links.hidden = false;
+  } else {
+    links.hidden = true;
+  }
+}
+
+/* Offline track map: pad, ground station, GPS track, rocket. North up,
+ * scaled to fit, with a scale bar. No tiles: works with no internet. */
+function drawMap(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || canvas.width, cssH = canvas.clientHeight || canvas.height;
+  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) { canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr); }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = cssW, H = cssH;
+  const cs = getComputedStyle(document.documentElement);
+  const col = (n) => cs.getPropertyValue(n).trim();
+  ctx.fillStyle = col("--bg"); ctx.fillRect(0, 0, W, H);
+
+  /* points in metres east/north of the ground station */
+  const gsLat = receiver.gs.lat, gsLon = receiver.gs.lon;
+  const kLat = 111320, kLon = 111320 * Math.cos(gsLat * Math.PI / 180);
+  const toEN = (lat, lon) => ({ e: (lon - gsLon) * kLon, n: (lat - gsLat) * kLat });
+  const pts = [];
+  const gsP = { e: 0, n: 0 };
+  pts.push(gsP);
+  const padP = receiver.padFix ? toEN(receiver.padFix.lat_e7 / 1e7, receiver.padFix.lon_e7 / 1e7) : null;
+  if (padP) pts.push(padP);
+  const track = receiver.track.map((t) => ({ ...toEN(t.lat_e7 / 1e7, t.lon_e7 / 1e7), state: t.state }));
+  for (const t of track) pts.push(t);
+  const rocketP = receiver.lastFix ? toEN(receiver.lastFix.lat_e7 / 1e7, receiver.lastFix.lon_e7 / 1e7) : null;
+
+  let minE = -50, maxE = 50, minN = -50, maxN = 50;
+  for (const q of pts) { minE = Math.min(minE, q.e); maxE = Math.max(maxE, q.e); minN = Math.min(minN, q.n); maxN = Math.max(maxN, q.n); }
+  const pad = 28;
+  const span = Math.max(maxE - minE, maxN - minN, 100) * 1.15;
+  const scale = Math.min(W - 2 * pad, H - 2 * pad) / span;
+  const cE = (minE + maxE) / 2, cN = (minN + maxN) / 2;
+  const X = (e) => W / 2 + (e - cE) * scale;
+  const Y = (n) => H / 2 - (n - cN) * scale;
+
+  /* grid */
+  const gridM = niceStep(span / 5);
+  ctx.strokeStyle = col("--line"); ctx.lineWidth = 1;
+  const e0 = Math.floor((cE - span / 2) / gridM) * gridM;
+  for (let e = e0; e <= cE + span / 2; e += gridM) { ctx.beginPath(); ctx.moveTo(X(e), 0); ctx.lineTo(X(e), H); ctx.stroke(); }
+  const n0 = Math.floor((cN - span / 2) / gridM) * gridM;
+  for (let n = n0; n <= cN + span / 2; n += gridM) { ctx.beginPath(); ctx.moveTo(0, Y(n)); ctx.lineTo(W, Y(n)); ctx.stroke(); }
+
+  /* track */
+  if (track.length > 1) {
+    ctx.beginPath();
+    track.forEach((t, i) => (i ? ctx.lineTo(X(t.e), Y(t.n)) : ctx.moveTo(X(t.e), Y(t.n))));
+    ctx.strokeStyle = col("--data"); ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+  }
+  /* bearing line GS -> rocket */
+  if (rocketP) {
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = col("--accent"); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(rocketP.e), Y(rocketP.n)); ctx.stroke(); ctx.setLineDash([]);
+  }
+  const marker = (q, color, label, shape) => {
+    const x = X(q.e), y = Y(q.n);
+    ctx.fillStyle = color;
+    if (shape === "tri") { ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 6, y + 5); ctx.lineTo(x - 6, y + 5); ctx.closePath(); ctx.fill(); }
+    else if (shape === "sq") { ctx.fillRect(x - 5, y - 5, 10, 10); }
+    else { ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = col("--fg"); ctx.font = "11px Barlow, sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(label, x + 9, y + 4);
+  };
+  if (padP) marker(padP, col("--muted"), "pad", "tri");
+  marker(gsP, col("--good"), "you", "sq");
+  if (rocketP) marker(rocketP, col("--accent"), "rocket", "dot");
+
+  /* north arrow and scale bar */
+  ctx.fillStyle = col("--muted"); ctx.font = "bold 12px Barlow, sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("N", W - 16, 16);
+  ctx.beginPath(); ctx.moveTo(W - 16, 20); ctx.lineTo(W - 16, 34); ctx.strokeStyle = col("--muted"); ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W - 16, 18); ctx.lineTo(W - 20, 25); ctx.lineTo(W - 12, 25); ctx.closePath(); ctx.fill();
+  const barM = gridM;
+  const barPx = barM * scale;
+  ctx.fillRect(10, H - 14, barPx, 3);
+  ctx.textAlign = "left"; ctx.font = "11px 'JetBrains Mono', monospace";
+  const barLabel = imperial ? `${Math.round(barM / M_PER_FT).toLocaleString()} ft` : `${barM} m`;
+  ctx.fillText(barLabel, 10, H - 18);
+  if (!rocketP) { ctx.textAlign = "center"; ctx.font = "13px Barlow, sans-serif"; ctx.fillText("no rocket fix yet", W / 2, H / 2); }
+}
+
+function renderPost(p) {
+  const stats = $("post-stats");
+  const landed = receiver.events.some((e) => e.state === STATE.LANDED);
+  const hasFlight = receiver.launchTimeMs !== null;
+  if (!hasFlight) {
+    stats.innerHTML = `<div class="empty" style="grid-column:1/-1">Completes after landing</div>`;
+  } else {
+    const kv = (label, [v, u], cls = "") => `<div class="kv"><span class="label">${label}</span><span class="v ${cls}">${v}<small>${u}</small></span></div>`;
+    const ap = receiver.apogee;
+    const dro = receiver.drogue.n ? -receiver.drogue.sum / receiver.drogue.n : null;
+    const mai = receiver.main.n ? -receiver.main.sum / receiver.main.n : null;
+    const landEv = receiver.events.find((e) => e.state === STATE.LANDED);
+    let drift = null;
+    if (receiver.padFix && receiver.landed) {
+      const a = receiver.padFix, b = receiver.landed;
+      const dLat = (b.lat_e7 - a.lat_e7) / 1e7 * 111320;
+      const dLon = (b.lon_e7 - a.lon_e7) / 1e7 * 111320 * Math.cos(a.lat_e7 / 1e7 * Math.PI / 180);
+      drift = Math.hypot(dLat, dLon);
+    }
+    stats.innerHTML = [
+      kv("Apogee", ap ? fmt.alt(ap.alt_cm) : ["--", ""]),
+      kv("Time to apogee", ap ? [ap.t.toFixed(1), "s"] : ["--", ""]),
+      kv("Max speed", fmt.speed(receiver.maxVz_cms)),
+      kv("Max accel", [(receiver.maxAccel_mg / 1000).toFixed(1), "g"]),
+      kv("Drogue descent", dro !== null ? fmt.speed(dro) : ["--", ""]),
+      kv("Main descent", mai !== null ? fmt.speed(mai) : ["--", ""]),
+      kv("Flight time", landEv ? [landEv.t.toFixed(1), "s"] : ["in progress", ""]),
+      kv("Drift from pad", drift !== null ? fmt.dist(drift) : ["--", ""]),
+    ].join("") + (!landed ? `<div class="note" style="grid-column:1/-1">Flight in progress, numbers update live.</div>` : "");
+  }
+  drawChart($("post-chart"), receiver.history, { apogee: receiver.apogee, emptyText: "Full altitude profile appears after liftoff" });
+
+  const total = receiver.rx + receiver.lost;
+  const kv2 = (label, v) => `<div class="kv"><span class="label">${label}</span><span class="v">${v}</span></div>`;
+  $("post-link").innerHTML = [
+    kv2("Packets received", receiver.rx.toLocaleString()),
+    kv2("Packets lost", `${receiver.lost.toLocaleString()}<small>${total ? (receiver.lossPct()).toFixed(1) + "%" : ""}</small>`),
+    kv2("Bad CRC", receiver.crcErrors),
+    kv2("Baro samples rejected", receiver.rejectedSamples),
+    kv2("RSSI avg / min", receiver.rssi.n ? `${(receiver.rssi.sum / receiver.rssi.n).toFixed(0)} / ${receiver.rssi.min}<small>dBm</small>` : "--"),
+  ].join("");
+  renderLog($("post-log"));
+}
+
+/* ---- ground station ---- */
+/* The GS screen is drawn by GroundStationUI (gs-ui.js) from a model the
+ * host builds here. Nothing in gs-ui.js touches the DOM or the sim. */
+function buildGSModel(clock) {
+  const r = receiver;
+  const p = r.last;
+  const age = r.age(clock);
+  const landEv = r.events.find((e) => e.state === STATE.LANDED);
+  let drift = null;
+  if (r.padFix && r.landed) {
+    const a = r.padFix, b = r.landed;
+    const dLat = (b.lat_e7 - a.lat_e7) / 1e7 * 111320;
+    const dLon = (b.lon_e7 - a.lon_e7) / 1e7 * 111320 * Math.cos(a.lat_e7 / 1e7 * Math.PI / 180);
+    drift = Math.hypot(dLat, dLon);
+  }
+  const rx = {
+    hasPacket: !!p,
+    linked: !!p && age !== null && age < 5,
+    age: age === null ? 999 : age,
+    rssi: p ? p.rssi_dbm : -128,
+    state: p ? p.state : 0,
+    armed: !!(p && (p.flags & FLAG.ARMED)),
+    testMode: !!(p && (p.flags & FLAG.TEST_MODE)),
+    baroOk: !!(p && (p.flags & FLAG.BARO_OK)),
+    imuOk: !!(p && (p.flags & FLAG.IMU_OK)),
+    pyroChannels: profile.pyroChannels,
+    pyroFired: p ? p.pyro_fired : 0,
+    pyroCont: p ? p.pyro_continuity : 0,
+    alt_cm: p ? p.altitude_agl_cm : 0,
+    vz_cms: p ? p.vertical_vel_cms : 0,
+    flightTime: p ? r.flightTime(p.time_ms) : 0,
+    maxAlt_cm: r.maxAlt_cm,
+    accel_g: p ? Math.hypot(p.accel_x_mg, p.accel_y_mg, p.accel_z_mg) / 1000 : 0,
+    tilt: p ? p.tilt_deg : 0,
+    battery_v: p ? p.battery_mv / 1000 : 0,
+    fix: !!(p && p.gps_fix === GPS_FIX.FIX_3D),
+    lat: p ? p.gps_lat_e7 / 1e7 : 0,
+    lon: p ? p.gps_lon_e7 / 1e7 : 0,
+    sats: p ? p.gps_sats : 0,
+    lastFixLat: r.lastFix ? r.lastFix.lat_e7 / 1e7 : null,
+    lastFixLon: r.lastFix ? r.lastFix.lon_e7 / 1e7 : null,
+    lastFixAge: r.lastFix ? clock - r.lastFix.clock : null,
+    toRocket: r.toRocket(),
+    lossPct: r.lossPct(),
+    rateHz: r.rateHz(),
+    hasFlight: r.launchTimeMs !== null,
+    stats: {
+      apogee: r.apogee,
+      maxVz_cms: r.maxVz_cms,
+      maxAccel_g: r.maxAccel_mg / 1000,
+      drogue: r.drogue.n ? -r.drogue.sum / r.drogue.n : null,
+      main: r.main.n ? -r.main.sum / r.main.n : null,
+      flightTime: landEv ? landEv.t : null,
+      drift,
+      landed: !!landEv,
+      rx: r.rx, lost: r.lost,
+      rssiN: r.rssi.n, rssiAvg: r.rssi.n ? r.rssi.sum / r.rssi.n : 0, rssiMin: r.rssi.min,
+    },
+  };
+  const gs = {
+    heading: gsHardware.heading,
+    battery: gsHardware.battery,
+    gpsFix: true, gpsSats: 11,
+    lat: receiver.gs.lat, lon: receiver.gs.lon,
+    compassOk: true,
+  };
+  return {
+    rx, gs,
+    logs: flightLogs.map((l) => ({ name: l.name, apogee_cm: l.apogee_cm, duration: l.duration, frames: l.frames.length })),
+    replay: replay !== null,
+    replayIndex: replay ? replay.index : -1,
+    sdPresent: false,
+  };
+}
+
+function renderGS() {
+  gsui.render(gsDisplay);
+}
+
+/* ====================================================================== */
+/* Controls                                                                */
+/* ====================================================================== */
+
+function buildCompassTicks() {
+  const g = $("compass-ticks");
+  let s = "";
+  for (let d = 0; d < 360; d += 10) {
+    const major = d % 90 === 0;
+    const r1 = major ? 98 : 104, r2 = 112;
+    const a = (d - 90) * Math.PI / 180;
+    s += `<line class="tick ${major ? "major" : ""}" x1="${(120 + r1 * Math.cos(a)).toFixed(1)}" y1="${(120 + r1 * Math.sin(a)).toFixed(1)}" x2="${(120 + r2 * Math.cos(a)).toFixed(1)}" y2="${(120 + r2 * Math.sin(a)).toFixed(1)}"></line>`;
+  }
+  g.innerHTML = s;
+}
+
+function scaleGS() {
+  const wrap = $("gs-scale");
+  const inner = $("gs-scale-inner");
+  const w = wrap.clientWidth || 480;
+  const s = Math.min(1, w / 480);
+  inner.style.transform = `scale(${s})`;
+  wrap.style.height = `${Math.round(320 * s) + 2}px`;
+}
+
+function setView(v) {
+  $("view").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.view === v));
+  $("wrap-phone").hidden = v === "gs";
+  $("wrap-gs").hidden = v === "phone";
+  requestAnimationFrame(scaleGS);
+}
+
+function wire() {
+  $("profile").addEventListener("change", (e) => { profile = PROFILES[e.target.value]; resetSim(); });
+  $("btn-arm").addEventListener("click", () => {
+    if (!sim) return;
+    const nowArmed = !sim.armed;
+    sim.arm(nowArmed);
+    if (sim.armed && !recording) startRecording();
+    $("btn-arm").textContent = sim.armed ? "Disarm" : "Arm";
+    $("btn-arm").classList.toggle("on", sim.armed);
+    $("btn-launch").disabled = !sim.armed;
+  });
+  $("btn-launch").addEventListener("click", () => {
+    if (sim && sim.launch()) {
+      launched = true;
+      $("btn-launch").disabled = true;
+      $("btn-arm").disabled = true;
+    }
+  });
+  $("btn-pause").addEventListener("click", () => {
+    paused = !paused;
+    $("btn-pause").textContent = paused ? "Resume" : "Pause";
+  });
+  $("btn-reset").addEventListener("click", resetSim);
+  $("speed").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    speed = parseFloat(b.dataset.speed);
+    $("speed").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+  }));
+  $("loss").addEventListener("input", (e) => {
+    $("loss-val").textContent = `${e.target.value}%`;
+    if (sim) sim.faults.packetLossPct = parseInt(e.target.value, 10);
+  });
+  $("f-gps").addEventListener("change", (e) => { if (sim) sim.faults.gpsDropout = e.target.checked; });
+  $("f-batt").addEventListener("change", (e) => { if (sim) sim.faults.lowBattery = e.target.checked; });
+  $("f-baro").addEventListener("click", () => { if (sim) sim.injectBaroGlitch(); });
+
+  /* ---- ground station buttons: press/release, like GPIO ---- */
+  const press = (name) => gsui.onButton(name, "press");
+  const release = (name) => gsui.onButton(name, "release");
+  $("gs-buttons").querySelectorAll("button").forEach((b) => {
+    const name = b.dataset.btn;
+    let down = false;
+    const onDown = (e) => { e.preventDefault(); if (down) return; down = true; b.classList.add("down"); press(name); };
+    const onUp = (e) => { if (e) e.preventDefault(); if (!down) return; down = false; b.classList.remove("down"); release(name); };
+    b.addEventListener("pointerdown", onDown);
+    b.addEventListener("pointerup", onUp);
+    b.addEventListener("pointercancel", onUp);
+    b.addEventListener("pointerleave", onUp);
+    b.addEventListener("contextmenu", (e) => e.preventDefault());
+  });
+  const keyMap = { v: "view", V: "view", ArrowUp: "up", ArrowDown: "down", Enter: "select", Backspace: "back", Escape: "back" };
+  const keysDown = new Set();
+  window.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    const name = keyMap[e.key];
+    if (!name || keysDown.has(name)) return;
+    keysDown.add(name); e.preventDefault(); press(name);
+  });
+  window.addEventListener("keyup", (e) => {
+    const name = keyMap[e.key];
+    if (!name) return;
+    keysDown.delete(name); release(name);
+  });
+  $("gs-heading").addEventListener("input", (e) => {
+    gsHardware.heading = parseInt(e.target.value, 10);
+    $("gs-heading-val").textContent = `${String(gsHardware.heading).padStart(3, "0")}°`;
+  });
+  $("view").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+  $("phone-tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { showTab(b.dataset.tab); renderAll(true); }));
+  $("unit-btn").addEventListener("click", () => { imperial = !imperial; renderAll(true); });
+  $("rc-mode").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    recoveryMode = b.dataset.mode;
+    $("rc-mode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    $("rc-compass").hidden = recoveryMode !== "compass";
+    $("rc-mapwrap").hidden = recoveryMode !== "map";
+    renderAll(true);
+  }));
+  $("copy-coords").addEventListener("click", async () => {
+    const f = receiver.lastFix;
+    if (!f) return;
+    const text = `${(f.lat_e7 / 1e7).toFixed(6)}, ${(f.lon_e7 / 1e7).toFixed(6)}`;
+    const btn = $("copy-coords");
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "Copied";
+    } catch (err) {
+      btn.textContent = text;
+    }
+    setTimeout(() => { btn.textContent = "Copy coordinates"; }, 2000);
+  });
+  window.addEventListener("resize", scaleGS);
+}
+
+buildCompassTicks();
+gsDisplay = new Display($("gs"));
+gsui = new GroundStationUI({
+  /* these become radio commands or local actions on the real handheld */
+  requestTestMode: () => (sim ? sim.requestTestMode() : { ok: false, text: "no link" }),
+  confirmTestMode: (token) => (sim ? sim.confirmTestMode(token) : { ok: false, text: "no link" }),
+  exitTestMode: () => (sim ? sim.exitTestMode() : { ok: false, text: "no link" }),
+  fire: (ch, token) => (sim ? sim.groundFire(ch, token) : { ok: false, text: "no link" }),
+  reloadPyro: () => { if (sim) sim.reloadPyro(); },
+  replay: (i) => startReplay(i),
+  stopReplay: () => stopReplay(),
+  setProfile: (id) => {
+    if (sim && (sim.state > 1)) return;   /* only on the pad, disarmed */
+    profile = PROFILES[id];
+    $("profile").value = id;
+    resetSim();
+  },
+});
+wire();
+resetSim();
+setView("both");
+requestAnimationFrame(loop);
+
+</script>
+
+</body>
+</html>
