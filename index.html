@@ -279,6 +279,21 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 .note { font-size: 12px; color: var(--muted); }
 .copy-btn { margin-top: 8px; width: 100%; }
 
+.text-input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 15px; font-weight: 600; color: var(--fg); }
+.text-input.title-input { font-size: 18px; font-weight: 700; }
+.flight-row { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; color: var(--fg); }
+.flight-row:hover { border-color: var(--muted); }
+.flight-row .fr-name { font-weight: 700; font-size: 15px; }
+.flight-row .fr-meta { font-size: 12px; color: var(--muted); font-family: var(--font-num); }
+.flight-row .fr-status { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; }
+.st-armed .fr-status, .state-pill.st-armed { color: var(--st-armed); }
+.st-flight .fr-status { color: var(--st-boost); }
+.st-landed .fr-status { color: var(--warn); }
+.st-recovered .fr-status { color: var(--good); }
+.st-aborted .fr-status { color: var(--faint); }
+.state-pill.st-flight { background: var(--st-boost); } .state-pill.st-landed { background: var(--warn); }
+.state-pill.st-recovered { background: var(--good); } .state-pill.st-armed { background: var(--st-armed); color: #06090d; } .state-pill.st-aborted { background: var(--faint); }
+#flight-detail { display: flex; flex-direction: column; gap: 12px; }
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
 .stat-grid .kv .v { font-size: 18px; }
 .flight-log { display: flex; flex-direction: column; gap: 0; }
@@ -355,6 +370,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
     <label class="toggle"><input type="checkbox" id="f-gps"> GPS dropout</label>
     <label class="toggle"><input type="checkbox" id="f-batt"> Low battery</label>
     <div class="row"><button class="btn" id="f-baro">Baro glitch (one bad sample)</button></div>
+    <div class="row"><button class="btn" id="f-pickup" title="Shakes the accelerometer like a rocket being carried">Pick up rocket (after landing)</button></div>
   </div>
 
   <div class="ctl-group site">
@@ -412,6 +428,11 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
           <span class="age num" id="ph-age">--</span>
         </div>
         <div class="pad-summary nogo" id="pad-summary">Checking...</div>
+        <div class="card" id="flight-name-card" hidden>
+          <h3 id="flight-name-title">New flight</h3>
+          <input type="text" id="flight-name" class="text-input" maxlength="48" aria-label="Flight name">
+          <p class="note" id="flight-name-note" style="margin:8px 0 0"></p>
+        </div>
         <div class="card">
           <h3>Pad checklist</h3>
           <div class="check" id="checklist"></div>
@@ -515,20 +536,51 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
         </div>
       </div>
 
-      <!-- POST FLIGHT -->
+      <!-- FLIGHTS -->
       <div class="phone-body" id="tab-post" hidden>
-        <div class="card">
-          <h3>Flight summary</h3>
-          <div class="stat-grid" id="post-stats"><div class="empty" style="grid-column:1/-1">Completes after landing</div></div>
-        </div>
-        <canvas class="chart tall" id="post-chart" width="358" height="200"></canvas>
-        <div class="card">
-          <h3>Link statistics</h3>
-          <div class="stat-grid" id="post-link"></div>
-        </div>
-        <div class="card">
-          <h3>Timeline</h3>
-          <div class="flight-log" id="post-log"></div>
+        <div id="flights-list"></div>
+        <div id="flight-detail" hidden>
+          <div class="row" style="justify-content:space-between">
+            <button class="btn" id="fd-back">&#8249; Flights</button>
+            <span class="state-pill" id="fd-status">landed</span>
+          </div>
+          <input type="text" id="fd-title" class="text-input title-input" maxlength="48" aria-label="Flight name">
+          <div class="note" id="fd-sub"></div>
+          <div class="card">
+            <h3>Flight summary</h3>
+            <div class="stat-grid" id="fd-stats"></div>
+          </div>
+          <canvas class="chart tall" id="post-chart" width="358" height="200"></canvas>
+          <div class="card">
+            <h3>Positions</h3>
+            <div class="coords" id="fd-coords"></div>
+            <button class="btn copy-btn" id="fd-mark" hidden>Mark as recovered</button>
+          </div>
+          <div class="card">
+            <h3>Link statistics</h3>
+            <div class="stat-grid" id="post-link"></div>
+          </div>
+          <div class="card">
+            <h3>Timeline</h3>
+            <div class="flight-log" id="post-log"></div>
+          </div>
+          <div class="card">
+            <h3>Export</h3>
+            <div class="two">
+              <button class="btn" id="fd-csv">Download CSV</button>
+              <button class="btn" id="fd-json">Download JSON</button>
+            </div>
+            <div class="two" style="margin-top:8px">
+              <button class="btn" id="fd-replay">Replay flight</button>
+              <button class="btn danger" id="fd-delete">Delete</button>
+            </div>
+            <div class="row" id="fd-delete-confirm" hidden style="margin-top:8px;justify-content:space-between">
+              <span class="note">Delete this flight for good?</span>
+              <span class="row"><button class="btn danger" id="fd-delete-yes">Yes, delete</button><button class="btn" id="fd-delete-no">No</button></span>
+            </div>
+            <p class="note" id="fd-export-note" style="margin:8px 0 0"></p>
+            <p class="note" id="fd-frames" style="margin:4px 0 0"></p>
+          </div>
         </div>
       </div>
 
@@ -536,7 +588,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
         <button data-tab="pad" class="on"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg>Pad</button>
         <button data-tab="flight"><svg viewBox="0 0 24 24"><path d="M12 3l3 7h-6zM9 10h6v6a3 3 0 0 1-6 0zM7 21h10"/></svg>Flight</button>
         <button data-tab="recovery"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6l3 6-3 6-3-6z"/></svg>Recovery</button>
-        <button data-tab="post"><svg viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M7 16l4-6 3 3 5-7"/></svg>Post</button>
+        <button data-tab="post"><svg viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M7 16l4-6 3 3 5-7"/></svg>Flights</button>
       </nav>
     </div>
   </div>
@@ -556,6 +608,9 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
     </div>
     <div class="gs-hw">
       <span class="label">Handheld sensors</span>
+      <div class="row">
+        <button class="btn" id="gs-walk" title="Moves the handheld toward the rocket at walking pace">Walk to rocket</button>
+      </div>
       <div class="row">
         <label for="gs-heading" style="font-size:13px">Handheld heading</label>
         <input type="range" id="gs-heading" min="0" max="359" step="1" value="0" style="width:160px">
@@ -869,6 +924,7 @@ class FlightSim {
      * The flight computer is the authority: it refuses to enter while
      * armed, drops out when armed, and times out on its own. */
     this.testMode = false;
+    this.handling = false;        /* someone is carrying the landed rocket (sim control) */
     this.testToken = null;        /* random token issued at request time */
     this.testPending = null;      /* token waiting for confirmation */
     this.testExpiresAt = 0;       /* seconds since boot */
@@ -1215,7 +1271,13 @@ class FlightSim {
     pkt.accel_x_mg = clamp(Math.round(gauss(lateral) * 1000), -32768, 32767);
     pkt.accel_y_mg = clamp(Math.round(gauss(lateral) * 1000), -32768, 32767);
     /* on the pad the z axis reads +1 g (gravity reaction) */
-    const zG = (s <= STATE.ARMED || s === STATE.LANDED) ? 1.0 : azG + 1.0;
+    let zG = (s <= STATE.ARMED || s === STATE.LANDED) ? 1.0 : azG + 1.0;
+    if (this.handling && s === STATE.LANDED) {
+      /* carried by hand: the IMU sees swinging and steps */
+      zG = 1.0 + 0.5 * Math.sin(this.t * 5.1) + gauss(0.15);
+      pkt.accel_x_mg = clamp(Math.round((0.4 * Math.sin(this.t * 3.7) + gauss(0.1)) * 1000), -32768, 32767);
+      pkt.accel_y_mg = clamp(Math.round((0.3 * Math.cos(this.t * 4.3) + gauss(0.1)) * 1000), -32768, 32767);
+    }
     pkt.accel_z_mg = clamp(Math.round((zG + gauss(0.02)) * 1000), -32768, 32767);
 
     pkt.tilt_deg = clamp(Math.round(this.tilt + gauss(0.5)), 0, 180);
@@ -1282,6 +1344,304 @@ class FlightSim {
 }
 
 
+/* ---- flights.js ---- */
+/*
+ * flights.js : flight records and their lifecycle.
+ *
+ * One flight = one record, opened when the rocket reports armed, closed
+ * when the ground station declares it recovered. The record carries every
+ * received frame so a flight can be replayed or exported later.
+ *
+ * Lifecycle (decided by the system, not by button presses):
+ *   armed -> flight -> landed -> recovered
+ *
+ * This file is shared by the phone UI and, as a port, by the ground
+ * station firmware. Storage is behind a tiny adapter so the phone uses
+ * the browser's storage, the handheld uses microSD and the rocket uses
+ * flash, all with the same record shape.
+ *
+ * Rule from the field: nothing is ever downloaded or overwritten without
+ * the user asking. An index (names, dates, status) is cheap; the frames
+ * are fetched per flight, on demand, once.
+ */
+
+
+const RECOVERY_RADIUS_M = 15;
+const RECOVERY_HOLD_S = 10;
+const HANDLING_HOLD_S = 2;
+
+const STORAGE_KEY = "fc.flights.v1";
+const STORAGE_BUDGET = 4.5 * 1024 * 1024;   /* stay under the usual 5 MB */
+
+function distM(lat1, lon1, lat2, lon2) {
+  const k = Math.PI / 180;
+  const dLat = (lat2 - lat1) * k, dLon = (lon2 - lon1) * k;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * k) * Math.cos(lat2 * k) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(a));
+}
+
+function defaultFlightName(rocketName, existing, date = new Date()) {
+  const d = date.toISOString().slice(0, 10);
+  const sameDay = existing.filter((r) => r.rocket === rocketName && r.date === d).length;
+  return `${rocketName} ${d} #${sameDay + 1}`;
+}
+
+const NAME_SUFFIXES = ["", "cert", "test flight", "practice", "ground test"];
+
+class FlightStore {
+  constructor(storage) {
+    this.storage = storage || browserStorage();
+    this.records = [];
+    this.open = null;              /* the record currently being written */
+    this.nearSince = null;
+    this.handlingSince = null;
+    this.lastSave = 0;
+    this.onChange = null;          /* UI hook */
+    this.load();
+  }
+
+  /* ---- persistence ---- */
+  load() {
+    try {
+      const raw = this.storage.read();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) this.records = parsed;
+      }
+    } catch (e) { this.records = []; }
+    /* a record that was still open when the page closed stays as it was */
+    for (const r of this.records) if (r.status === "armed" && r.frames.length === 0) r.status = "aborted";
+    /* a flight that landed but was never recovered stays live: the rocket is still out there */
+    this.open = this.records.find((r) => r.status === "landed") || null;
+  }
+
+  save(force = false) {
+    const now = Date.now();
+    if (!force && now - this.lastSave < 5000) return;
+    this.lastSave = now;
+    try {
+      this.storage.write(JSON.stringify(this.records));
+    } catch (e) {
+      /* storage can be full or unavailable; the flight still runs */
+      this.storageError = String(e && e.message || e);
+    }
+    if (this.onChange) this.onChange();
+  }
+
+  bytesUsed() {
+    try { return JSON.stringify(this.records).length; } catch (e) { return 0; }
+  }
+
+  storageLine() {
+    const used = this.bytesUsed();
+    const avg = this.records.length ? used / this.records.length : 30000;
+    const left = Math.max(0, Math.floor((STORAGE_BUDGET - used) / avg));
+    return `${this.records.length} flight${this.records.length === 1 ? "" : "s"}, ${(used / 1024).toFixed(0)} KB used, room for about ${left} more`;
+  }
+
+  /* ---- lifecycle ---- */
+  openFlight(rocketName, profileId, clock) {
+    const date = new Date().toISOString().slice(0, 10);
+    const rec = {
+      id: `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
+      name: defaultFlightName(rocketName, this.records),
+      rocket: rocketName,
+      profileId,
+      date,
+      createdAt: new Date().toISOString(),
+      status: "armed",
+      t: { armed: clock, liftoff: null, apogee: null, landed: null, recovered: null },
+      stats: null,
+      padFix: null,
+      landing: null,
+      recovery: null,
+      frames: [],
+      note: "",
+    };
+    this.records.unshift(rec);
+    this.open = rec;
+    this.nearSince = null;
+    this.handlingSince = null;
+    this.save(true);
+    return rec;
+  }
+
+  /** The record that still needs attention: landed but not recovered. */
+  unrecovered() {
+    return this.records.find((r) => r.status === "landed") || null;
+  }
+
+  rename(id, name) {
+    const r = this.records.find((x) => x.id === id);
+    if (r && name.trim()) { r.name = name.trim().slice(0, 48); this.save(true); }
+  }
+
+  setNote(id, note) {
+    const r = this.records.find((x) => x.id === id);
+    if (r) { r.note = note.slice(0, 500); this.save(true); }
+  }
+
+  remove(id) {
+    const i = this.records.findIndex((x) => x.id === id);
+    if (i >= 0) {
+      if (this.records[i] === this.open) this.open = null;
+      this.records.splice(i, 1);
+      this.save(true);
+    }
+  }
+
+  /** Close an unrecovered flight by hand (the rocket was found another way). */
+  markRecovered(id, clock, gs) {
+    const r = this.records.find((x) => x.id === id);
+    if (!r || r.status === "recovered") return;
+    r.status = "recovered";
+    r.t.recovered = clock;
+    r.recovery = gs ? { lat: gs.lat, lon: gs.lon, how: "manual" } : { how: "manual" };
+    if (r === this.open) this.open = null;
+    this.save(true);
+  }
+
+  /**
+   * Called for every received frame. receiver = ground side picture,
+   * clock = ground station clock (s), gs = {lat, lon} of the handheld.
+   */
+  onFrame(frameBytes, receiver, clock, gs, profileName, profileId) {
+    const p = receiver.last;
+    if (!p) return;
+    const armed = !!(p.flags & FLAG.ARMED);
+
+    /* open a record the moment the rocket reports armed */
+    if (!this.open && armed && p.state === STATE.ARMED) {
+      if (this.unrecovered()) return;   /* a rocket is still out there: do not bury its record */
+      this.openFlight(profileName, profileId, clock);
+    }
+    const r = this.open;
+    if (!r) return;
+
+    /* disarmed again before liftoff: forget the record, nothing happened */
+    if (r.status === "armed" && !armed && p.state <= STATE.PAD) {
+      this.records = this.records.filter((x) => x !== r);
+      this.open = null;
+      this.save(true);
+      return;
+    }
+
+    r.frames.push([Math.round(clock * 1000) / 1000, toHex(frameBytes)]);
+
+    if (r.status === "armed" && p.state >= STATE.BOOST) {
+      r.status = "flight";
+      r.t.liftoff = clock;
+    }
+    if (!r.padFix && receiver.padFix) {
+      r.padFix = { lat: receiver.padFix.lat_e7 / 1e7, lon: receiver.padFix.lon_e7 / 1e7 };
+    }
+    if (r.t.apogee === null && p.state >= STATE.APOGEE && receiver.apogee) {
+      r.t.apogee = clock;
+    }
+    if (r.status === "flight" && p.state === STATE.LANDED) {
+      r.status = "landed";
+      r.t.landed = clock;
+      if (receiver.lastFix) r.landing = { lat: receiver.lastFix.lat_e7 / 1e7, lon: receiver.lastFix.lon_e7 / 1e7 };
+      this.nearSince = null;
+      this.handlingSince = null;
+    }
+
+    /* summary stats, kept current so the record is complete even if the
+     * link dies before recovery */
+    r.stats = summarize(receiver);
+
+    /* recovery detection, only after landing */
+    if (r.status === "landed") {
+      let near = false;
+      if (gs && receiver.lastFix) {
+        const d = distM(gs.lat, gs.lon, receiver.lastFix.lat_e7 / 1e7, receiver.lastFix.lon_e7 / 1e7);
+        near = d < RECOVERY_RADIUS_M;
+      }
+      if (near) { if (this.nearSince === null) this.nearSince = clock; } else this.nearSince = null;
+
+      const accel = Math.hypot(p.accel_x_mg, p.accel_y_mg, p.accel_z_mg) / 1000;
+      const handled = Math.abs(accel - 1.0) > 0.3 && p.rssi_dbm > -70;   /* strong link = you are next to it */
+      if (handled) { if (this.handlingSince === null) this.handlingSince = clock; } else this.handlingSince = null;
+
+      const byPosition = this.nearSince !== null && clock - this.nearSince >= RECOVERY_HOLD_S;
+      const byHandling = this.handlingSince !== null && clock - this.handlingSince >= HANDLING_HOLD_S;
+      if (byPosition || byHandling) {
+        r.status = "recovered";
+        r.t.recovered = clock;
+        r.recovery = { lat: gs ? gs.lat : null, lon: gs ? gs.lon : null, how: byPosition ? "position" : "handling" };
+        this.open = null;
+        this.save(true);
+        return;
+      }
+    }
+
+    this.save(false);
+  }
+
+  /** Rebuild a ground-side picture from a stored record, instantly. */
+  replayInto(record, ReceiverClass, gs) {
+    const rx = new ReceiverClass();
+    if (gs) { rx.gs.lat = gs.lat; rx.gs.lon = gs.lon; }
+    for (const [c, h] of record.frames) rx.feed(fromHex(h), c);
+    return rx;
+  }
+
+  /* ---- export ---- */
+  toCSV(record) {
+    const head = ["t_s", "state", "altitude_agl_cm", "vertical_vel_cms", "accel_x_mg", "accel_y_mg", "accel_z_mg", "tilt_deg", "battery_mv", "pyro_continuity", "pyro_fired", "gps_lat", "gps_lon", "gps_alt_mm", "gps_fix", "gps_sats", "rssi_dbm", "flags", "counter"];
+    const rows = [head.join(",")];
+    let t0 = null;
+    for (const [c, h] of record.frames) {
+      const r = decode(fromHex(h));
+      if (!r.ok) continue;
+      const p = r.packet;
+      if (t0 === null) t0 = c;
+      rows.push([
+        (c - t0).toFixed(3), p.state, p.altitude_agl_cm, p.vertical_vel_cms, p.accel_x_mg, p.accel_y_mg, p.accel_z_mg,
+        p.tilt_deg, p.battery_mv, p.pyro_continuity, p.pyro_fired,
+        p.gps_fix === GPS_FIX.FIX_3D ? (p.gps_lat_e7 / 1e7).toFixed(7) : "",
+        p.gps_fix === GPS_FIX.FIX_3D ? (p.gps_lon_e7 / 1e7).toFixed(7) : "",
+        p.gps_alt_mm, p.gps_fix, p.gps_sats, p.rssi_dbm, p.flags, p.counter,
+      ].join(","));
+    }
+    return rows.join("\n") + "\n";
+  }
+
+  toJSON(record) {
+    return JSON.stringify(record, null, 2);
+  }
+}
+
+function summarize(r) {
+  const landEv = r.events.find((e) => e.state === STATE.LANDED);
+  let drift = null;
+  if (r.padFix && r.landed) {
+    drift = distM(r.padFix.lat_e7 / 1e7, r.padFix.lon_e7 / 1e7, r.landed.lat_e7 / 1e7, r.landed.lon_e7 / 1e7);
+  }
+  return {
+    apogee_cm: r.apogee ? r.apogee.alt_cm : null,
+    apogee_t: r.apogee ? r.apogee.t : null,
+    maxVz_cms: r.maxVz_cms,
+    maxAccel_mg: r.maxAccel_mg,
+    drogue_cms: r.drogue.n ? -r.drogue.sum / r.drogue.n : null,
+    main_cms: r.main.n ? -r.main.sum / r.main.n : null,
+    flightTime_s: landEv ? landEv.t : null,
+    drift_m: drift,
+    rx: r.rx, lost: r.lost, crcErrors: r.crcErrors, rejectedSamples: r.rejectedSamples,
+    rssiAvg: r.rssi.n ? r.rssi.sum / r.rssi.n : null, rssiMin: r.rssi.n ? r.rssi.min : null,
+  };
+}
+
+/* Browser storage adapter. Fails soft: a private window or a full disk
+ * just means nothing persists this session. */
+function browserStorage() {
+  return {
+    read() { try { return localStorage.getItem(STORAGE_KEY); } catch (e) { return null; } },
+    write(s) { localStorage.setItem(STORAGE_KEY, s); },
+  };
+}
+
+
 /* ---- gs-ui.js ---- */
 /*
  * gs-ui.js : the ground station's screens, written to be ported.
@@ -1309,6 +1669,7 @@ const C = Object.freeze({
 });
 
 const SCREENS = ["flight", "pad", "recovery", "post", "settings", "tests", "log"];
+const GS_NAME_SUFFIXES = ["", "cert", "test flight", "practice", "ground test"];
 const SCREEN_TITLE = { flight: "FLIGHT", pad: "PAD CHECK", recovery: "RECOVERY", post: "POST FLIGHT", settings: "SETTINGS", tests: "TESTS", log: "FLIGHT LOG" };
 
 const GS_STATE_NAMES = ["IDLE", "PAD", "ARMED", "BOOST", "COAST", "APOGEE", "DROGUE", "MAIN", "LANDED", "FAULT"];
@@ -1432,6 +1793,7 @@ class GroundStationUI {
       case "settings": return this._settingsInput(name);
       case "tests": return this._testsInput(name);
       case "log": return this._logInput(name);
+      case "pad": return this._padInput(name);
       default:
         if (name === "back") this._go("flight");
     }
@@ -1445,6 +1807,21 @@ class GroundStationUI {
   }
 
   _toast(text, secs = 2.5) { this.toast = { text, until: this.now + secs }; }
+
+  /* ---- pad: name the flight with Up/Down while armed ---- */
+  _padInput(name) {
+    if (name === "back") { this._go("flight"); return; }
+    const f = this.model ? this.model.flight : null;
+    if (!f || f.status !== "armed") return;
+    if (name === "up" || name === "down") {
+      const dir = name === "down" ? 1 : -1;
+      let base = f.name, idx = 0;
+      GS_NAME_SUFFIXES.forEach((suf, i) => { if (suf && f.name.endsWith(" " + suf)) { base = f.name.slice(0, -(suf.length + 1)); idx = i; } });
+      const next = (idx + dir + GS_NAME_SUFFIXES.length) % GS_NAME_SUFFIXES.length;
+      const nn = GS_NAME_SUFFIXES[next] ? `${base} ${GS_NAME_SUFFIXES[next]}` : base;
+      this.host.setFlightName(nn);
+    }
+  }
 
   /* ---- settings ---- */
   _settingsItems() {
@@ -1644,6 +2021,7 @@ class GroundStationUI {
           : "SEL ok   UP/DN reload (sim)   BACK";
         break;
       case "log": hint = this.model && this.model.replay ? "BACK stop replay" : "UP/DN pick   SEL replay   VIEW next"; break;
+      case "pad": hint = this.model && this.model.flight && this.model.flight.status === "armed" ? "UP/DN flight name tag   VIEW next" : "VIEW next screen   BACK flight"; break;
       default: hint = "VIEW next screen   BACK flight";
     }
     d.text(8, 300, hint, 13, C.GREY, "left");
@@ -1729,14 +2107,27 @@ class GroundStationUI {
     else { verdict = "GO FOR LAUNCH"; vcol = C.GREEN; }
     d.fillRect(0, 44, 480, 30, vcol);
     d.text(240, 50, verdict, 17, C.BLACK, "center", false, true);
-    let y = 82;
+    const m = this.model;
+    const f = m ? m.flight : null;
+    let y = 80;
+    const rowH = 27;
+    if (f) {
+      d.text(14, y, "FLIGHT", 11, C.GREY, "left", false, true);
+      d.text(70, y - 2, f.name, 16, C.AMBER, "left", false, true);
+      d.text(468, y, f.status === "armed" ? "UP/DN to tag" : f.status, 12, C.GREY, "right");
+      y += 24;
+    } else if (m && m.unrecovered) {
+      d.fillRect(10, y - 2, 460, 22, C.DAMBER);
+      d.text(240, y + 1, `${m.unrecovered}: landed, not recovered. New flights will not record.`, 13, C.AMBER, "center", false, true);
+      y += 26;
+    }
     for (const [name, st, val] of items) {
       const col = st === "ok" ? C.GREEN : st === "warn" ? C.AMBER : C.RED;
-      d.fillCircle(18, y + 10, 6, col);
-      d.text(34, y, name, 17, C.WHITE, "left");
-      d.text(468, y + 1, val, 16, st === "ok" ? C.WHITE : col, "right", true);
-      d.drawLine(10, y + 28, 470, y + 28, C.DDGREY);
-      y += 30;
+      d.fillCircle(18, y + 9, 6, col);
+      d.text(34, y, name, 16, C.WHITE, "left");
+      d.text(468, y + 1, val, 15, st === "ok" ? C.WHITE : col, "right", true);
+      d.drawLine(10, y + rowH - 3, 470, y + rowH - 3, C.DDGREY);
+      y += rowH;
     }
   }
 
@@ -1917,24 +2308,24 @@ class GroundStationUI {
     const logs = m ? m.logs : [];
     const imp = this.settings.imperial;
     if (!logs.length) { d.text(240, 150, "no flights recorded this session", 16, C.GREY, "center"); return; }
-    d.text(14, 48, "#", 12, C.GREY, "left", false, true);
-    d.text(50, 48, "ROCKET", 12, C.GREY, "left", false, true);
-    d.text(200, 48, "APOGEE", 12, C.GREY, "left", false, true);
-    d.text(310, 48, "FLIGHT", 12, C.GREY, "left", false, true);
-    d.text(400, 48, "PACKETS", 12, C.GREY, "left", false, true);
+    d.text(14, 48, "FLIGHT", 12, C.GREY, "left", false, true);
+    d.text(270, 48, "APOGEE", 12, C.GREY, "left", false, true);
+    d.text(360, 48, "STATUS", 12, C.GREY, "left", false, true);
+    const STCOL = { armed: C.AMBER, flight: C.ORANGE, landed: C.AMBER, recovered: C.GREEN, aborted: C.DGREY };
+    const STTXT = { armed: "armed", flight: "in flight", landed: "NOT RECOVERED", recovered: "recovered", aborted: "aborted" };
     let y = 68;
-    logs.forEach((l, i) => {
+    const first = Math.max(0, Math.min(this.cursor - 5, logs.length - 7));
+    logs.slice(first, first + 7).forEach((l, k) => {
+      const i = first + k;
       const sel = i === this.cursor;
       if (sel) d.fillRect(8, y - 4, 464, 30, m.replay && m.replayIndex === i ? C.DAMBER : C.DDGREY);
       const col = sel ? C.WHITE : C.GREY;
-      d.text(14, y, `${i + 1}`, 16, col, "left", true);
-      d.text(50, y, l.name, 16, col, "left");
-      d.text(200, y, l.apogee_cm !== null ? fAlt(l.apogee_cm, imp).join(" ") : "--", 16, col, "left", true);
-      d.text(310, y, l.duration !== null ? `${l.duration.toFixed(0)} s` : "partial", 16, col, "left", true);
-      d.text(400, y, `${l.frames}`, 16, col, "left", true);
+      d.text(14, y, l.name.length > 26 ? l.name.slice(0, 25) + "…" : l.name, 16, col, "left");
+      d.text(270, y, l.apogee_cm !== null ? fAlt(l.apogee_cm, imp).join(" ") : "--", 16, col, "left", true);
+      d.text(360, y, STTXT[l.status] || l.status, 14, STCOL[l.status] || col, "left", false, l.status === "landed");
       y += 32;
     });
-    if (m.sdPresent === false) d.text(240, 276, "no SD card: logs held in RAM only", 12, C.AMBER, "center");
+    if (m.sdPresent === false) d.text(240, 276, "no SD card: records kept in RAM only", 12, C.AMBER, "center");
   }
 }
 
@@ -1950,6 +2341,7 @@ class GroundStationUI {
  * Receiver only. When the ESP32 ground station is real, the Receiver
  * stays and FlightSim goes away.
  */
+
 
 
 
@@ -2282,15 +2674,16 @@ const liveReceiver = new Receiver();
 let receiver = liveReceiver;        /* swapped to a replay receiver during replay */
 let sim = null;
 
-/* ground station hardware the UI cannot see directly: switches and sensors */
-const gsHardware = { heading: 0, battery: 3.93 };
+/* ground station hardware the UI cannot see directly: switches and sensors.
+ * lat/lon is the handheld's own GPS; walking moves it toward the rocket. */
+const gsHardware = { heading: 0, battery: 3.93, lat: 0, lon: 0, walking: false };
 let gsui = null;
 let gsDisplay = null;
 
-/* flight logs: every frame the ground station received, per flight */
-const flightLogs = [];
-let recording = null;              /* {name, frames:[{clock, bytes}], apogee_cm, duration} */
-let replay = null;                 /* {index, clock, next} */
+/* flight records: opened at arm, closed at recovery, kept in the phone's storage */
+const flights = new FlightStore();
+let replay = null;                 /* {index, clock, next, record} */
+let viewFlightId = null;           /* record open in the Flights tab, null = list */
 let profile = PROFILES.zafiro;
 let site = { ...DEFAULT_SITE };
 let speed = 1;
@@ -2312,44 +2705,60 @@ function readSite() {
     gsOffsetNorth_m: parseFloat($("gs-n").value) || 0,
   };
   /* the ground station knows its own position from its own GPS */
-  receiver.gs.lat = site.padLat + site.gsOffsetNorth_m / 111320;
-  receiver.gs.lon = site.padLon + site.gsOffsetEast_m / (111320 * Math.cos(site.padLat * Math.PI / 180));
+  gsHardware.lat = site.padLat + site.gsOffsetNorth_m / 111320;
+  gsHardware.lon = site.padLon + site.gsOffsetEast_m / (111320 * Math.cos(site.padLat * Math.PI / 180));
+  gsHardware.walking = false;
+  $("gs-walk").classList.remove("on");
+  syncGsPosition();
+}
+
+function syncGsPosition() {
+  liveReceiver.gs.lat = gsHardware.lat; liveReceiver.gs.lon = gsHardware.lon;
+  if (receiver !== liveReceiver) { receiver.gs.lat = gsHardware.lat; receiver.gs.lon = gsHardware.lon; }
+}
+
+/* Simulated walking: the handheld moves toward the rocket's last fix at a
+ * brisk walk, so the recovery detection can be exercised. */
+function stepWalk(dt) {
+  if (!gsHardware.walking || !liveReceiver.lastFix) return;
+  const tLat = liveReceiver.lastFix.lat_e7 / 1e7, tLon = liveReceiver.lastFix.lon_e7 / 1e7;
+  const kLat = 111320, kLon = 111320 * Math.cos(gsHardware.lat * Math.PI / 180);
+  const dN = (tLat - gsHardware.lat) * kLat, dE = (tLon - gsHardware.lon) * kLon;
+  const d = Math.hypot(dN, dE);
+  if (d < 3) { gsHardware.walking = false; $("gs-walk").classList.remove("on"); return; }
+  const step = Math.min(d - 2, 1.4 * dt);   /* 1.4 m/s */
+  gsHardware.lat += (dN / d) * step / kLat;
+  gsHardware.lon += (dE / d) * step / kLon;
+  gsHardware.heading = (Math.atan2(dE, dN) * 180 / Math.PI + 360) % 360;
+  $("gs-heading").value = Math.round(gsHardware.heading);
+  $("gs-heading-val").textContent = `${String(Math.round(gsHardware.heading)).padStart(3, "0")}°`;
+  syncGsPosition();
 }
 
 function onFrame(frame, meta) {
   if (meta.dropped) return;           /* the radio never saw it */
   liveReceiver.feed(frame, meta.simTime);
-  if (recording) {
-    recording.frames.push({ clock: meta.simTime, bytes: frame });
-    const p = liveReceiver.last;
-    if (p) {
-      if (p.altitude_agl_cm > (recording.apogee_cm || 0) && liveReceiver.launchTimeMs !== null) recording.apogee_cm = liveReceiver.maxAlt_cm;
-      const landEv = liveReceiver.events.find((e) => e.state === STATE.LANDED);
-      if (landEv && recording.duration === null) recording.duration = landEv.t;
-      if (landEv && meta.simTime - recording.frames[recording.frames.length - 1].clock > 0) {
-        /* keep recording 10 s after landing, then close the log */
-        if (recording.closeAt === null) recording.closeAt = meta.simTime + 10;
-        if (meta.simTime >= recording.closeAt) recording = null;
-      }
-    }
+  const wasOpen = flights.open;
+  const wasStatus = wasOpen ? wasOpen.status : null;
+  flights.onFrame(frame, liveReceiver, meta.simTime, { lat: gsHardware.lat, lon: gsHardware.lon }, profile.name, profile.id);
+  /* recovered just now: show the record */
+  if (wasOpen && wasStatus !== "recovered" && wasOpen.status === "recovered") {
+    viewFlightId = wasOpen.id;
+    showTab("post");
+    gsui.screen = "post";
   }
 }
 
-function startRecording() {
-  recording = { name: profile.name, frames: [], apogee_cm: null, duration: null, closeAt: null };
-  flightLogs.push(recording);
-}
-
-/* ---- replay: feed a stored log through a fresh receiver at 5x ---- */
+/* ---- replay: feed a stored record through a fresh receiver at 5x ---- */
 function startReplay(index) {
-  const log = flightLogs[index];
-  if (!log || !log.frames.length) return;
+  const record = flights.records[index];
+  if (!record || !record.frames.length) return;
   paused = true;
   $("btn-pause").textContent = "Resume";
   const rr = new Receiver();
-  rr.gs.lat = liveReceiver.gs.lat; rr.gs.lon = liveReceiver.gs.lon;
+  rr.gs.lat = gsHardware.lat; rr.gs.lon = gsHardware.lon;
   receiver = rr;
-  replay = { index, clock: log.frames[0].clock, next: 0, log };
+  replay = { index, clock: record.frames[0][0], next: 0, record };
 }
 function stopReplay() {
   replay = null;
@@ -2358,9 +2767,9 @@ function stopReplay() {
 function stepReplay(dt) {
   if (!replay) return;
   replay.clock += dt * 5;
-  const fr = replay.log.frames;
-  while (replay.next < fr.length && fr[replay.next].clock <= replay.clock) {
-    receiver.feed(fr[replay.next].bytes, fr[replay.next].clock);
+  const fr = replay.record.frames;
+  while (replay.next < fr.length && fr[replay.next][0] <= replay.clock) {
+    receiver.feed(fromHex(fr[replay.next][1]), fr[replay.next][0]);
     replay.next++;
   }
 }
@@ -2373,8 +2782,13 @@ function resetSim() {
   sim.faults.lowBattery = $("f-batt").checked;
   if (replay) stopReplay();
   liveReceiver.reset();
-  if (recording && recording.frames.length === 0) flightLogs.pop();
-  recording = null;
+  /* an open record that never left the pad is dropped; a flight in progress
+   * is kept as it stands (the rocket may still be out there) */
+  if (flights.open && flights.open.status === "armed") flights.remove(flights.open.id);
+  flights.open = null;
+  viewFlightId = null;
+  sim.handling = false;
+  $("f-pickup").classList.remove("on");
   launched = false;
   paused = false;
   if (gsui) { gsui.settings.profile = profile.id; gsui.test.phase = "idle"; }
@@ -2404,7 +2818,7 @@ function loop(ts) {
   if (lastTs === null) lastTs = ts;
   let dt = Math.min(0.1, (ts - lastTs) / 1000);
   lastTs = ts;
-  if (!paused && sim) sim.step(dt * speed);
+  if (!paused && sim) { sim.step(dt * speed); stepWalk(dt * speed); }
   if (replay) stepReplay(dt);
   gsui.update(dt, buildGSModel(replay ? replay.clock : (sim ? sim.t : 0)));
   if (ts - lastRender > 50) {
@@ -2477,7 +2891,7 @@ function renderPhone(p, age, clock) {
   if (currentTab === "pad") renderPad(p, age);
   if (currentTab === "flight") renderFlight(p);
   if (currentTab === "recovery") renderRecovery(p, clock);
-  if (currentTab === "post") renderPost(p);
+  if (currentTab === "post") renderPost();
 }
 
 function renderPad(p, age) {
@@ -2527,6 +2941,25 @@ function renderPad(p, age) {
     cells.push(`<div class="pyro ${cls}"><div class="ch">${label}</div><div class="st">${txt}</div></div>`);
   }
   $("pyro-row").innerHTML = cells.join("");
+
+  /* flight record: name it while armed on the pad */
+  const nameCard = $("flight-name-card");
+  const rec = flights.open;
+  const unrec = flights.unrecovered();
+  if (rec && rec.status === "armed") {
+    nameCard.hidden = false;
+    $("flight-name-title").textContent = "New flight";
+    const inp = $("flight-name");
+    if (document.activeElement !== inp && inp.value !== rec.name) inp.value = rec.name;
+    $("flight-name-note").textContent = "Recording started at arm. Name it now or later, nothing is lost either way.";
+  } else if (!rec && unrec && !(p && (p.flags & FLAG.ARMED))) {
+    nameCard.hidden = false;
+    $("flight-name-title").textContent = "Previous flight not recovered";
+    $("flight-name").value = unrec.name;
+    $("flight-name-note").textContent = "Its last position is kept. Arming a new flight will not record until this one is marked recovered in Flights.";
+  } else {
+    nameCard.hidden = true;
+  }
 
   const c = $("pad-coords");
   if (p && p.gps_fix === GPS_FIX.FIX_3D) {
@@ -2929,49 +3362,117 @@ function drawMap(canvas) {
   if (!rocketP) { ctx.textAlign = "center"; ctx.font = "13px Barlow, sans-serif"; ctx.fillText("no rocket fix yet", W / 2, H / 2); }
 }
 
-function renderPost(p) {
-  const stats = $("post-stats");
-  const landed = receiver.events.some((e) => e.state === STATE.LANDED);
-  const hasFlight = receiver.launchTimeMs !== null;
-  if (!hasFlight) {
-    stats.innerHTML = `<div class="empty" style="grid-column:1/-1">Completes after landing</div>`;
-  } else {
-    const kv = (label, [v, u], cls = "") => `<div class="kv"><span class="label">${label}</span><span class="v ${cls}">${v}<small>${u}</small></span></div>`;
-    const ap = receiver.apogee;
-    const dro = receiver.drogue.n ? -receiver.drogue.sum / receiver.drogue.n : null;
-    const mai = receiver.main.n ? -receiver.main.sum / receiver.main.n : null;
-    const landEv = receiver.events.find((e) => e.state === STATE.LANDED);
-    let drift = null;
-    if (receiver.padFix && receiver.landed) {
-      const a = receiver.padFix, b = receiver.landed;
-      const dLat = (b.lat_e7 - a.lat_e7) / 1e7 * 111320;
-      const dLon = (b.lon_e7 - a.lon_e7) / 1e7 * 111320 * Math.cos(a.lat_e7 / 1e7 * Math.PI / 180);
-      drift = Math.hypot(dLat, dLon);
-    }
-    stats.innerHTML = [
-      kv("Apogee", ap ? fmt.alt(ap.alt_cm) : ["--", ""]),
-      kv("Time to apogee", ap ? [ap.t.toFixed(1), "s"] : ["--", ""]),
-      kv("Max speed", fmt.speed(receiver.maxVz_cms)),
-      kv("Max accel", [(receiver.maxAccel_mg / 1000).toFixed(1), "g"]),
-      kv("Drogue descent", dro !== null ? fmt.speed(dro) : ["--", ""]),
-      kv("Main descent", mai !== null ? fmt.speed(mai) : ["--", ""]),
-      kv("Flight time", landEv ? [landEv.t.toFixed(1), "s"] : ["in progress", ""]),
-      kv("Drift from pad", drift !== null ? fmt.dist(drift) : ["--", ""]),
-    ].join("") + (!landed ? `<div class="note" style="grid-column:1/-1">Flight in progress, numbers update live.</div>` : "");
+function renderPost() {
+  const list = $("flights-list");
+  const detail = $("flight-detail");
+  const rec = viewFlightId ? flights.records.find((r) => r.id === viewFlightId) : null;
+  if (!rec) {
+    viewFlightId = null;
+    detail.hidden = true;
+    list.hidden = false;
+    renderFlightList();
+    return;
   }
-  drawChart($("post-chart"), receiver.history, { apogee: receiver.apogee, emptyText: "Full altitude profile appears after liftoff" });
+  list.hidden = true;
+  detail.hidden = false;
+  renderFlightDetail(rec);
+}
 
-  const total = receiver.rx + receiver.lost;
+const STATUS_LABEL = { armed: "armed", flight: "in flight", landed: "landed, not recovered", recovered: "recovered", aborted: "aborted" };
+
+function renderFlightList() {
+  const el = $("flights-list");
+  const recs = flights.records;
+  if (!recs.length) {
+    el.innerHTML = `<div class="card"><div class="empty">No flights yet. A record opens by itself when the rocket is armed.</div></div><div class="note">${flights.storageLine()}</div>`;
+    return;
+  }
+  el.innerHTML = recs.map((r) => {
+    const ap = r.stats && r.stats.apogee_cm !== null ? fmt.alt(r.stats.apogee_cm).join(" ") : "--";
+    const live = flights.open === r;
+    return `<button class="flight-row st-${r.status}" data-id="${r.id}">
+      <span class="fr-name">${escapeHtml(r.name)}</span>
+      <span class="fr-meta">${r.date} · ${escapeHtml(r.rocket)} · apogee ${ap}</span>
+      <span class="fr-status">${STATUS_LABEL[r.status] || r.status}${live ? " · live" : ""}</span>
+    </button>`;
+  }).join("") + `<div class="note">${flights.storageLine()}</div>`;
+  el.querySelectorAll(".flight-row").forEach((b) => b.addEventListener("click", () => { viewFlightId = b.dataset.id; renderAll(true); }));
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+let detailCache = { id: null, frames: 0, rx: null };
+function receiverForRecord(rec) {
+  if (flights.open === rec || (replay && replay.record === rec)) return receiver;   /* live or replaying: use what is on screen */
+  if (detailCache.id === rec.id && detailCache.frames === rec.frames.length) return detailCache.rx;
+  const rx = flights.replayInto(rec, Receiver, { lat: gsHardware.lat, lon: gsHardware.lon });
+  detailCache = { id: rec.id, frames: rec.frames.length, rx };
+  return rx;
+}
+
+function renderFlightDetail(rec) {
+  const r = receiverForRecord(rec);
+  const s = rec.stats || {};
+  const title = $("fd-title");
+  if (document.activeElement !== title && title.value !== rec.name) title.value = rec.name;
+  $("fd-status").textContent = STATUS_LABEL[rec.status] || rec.status;
+  $("fd-status").className = `state-pill st-${rec.status}`;
+  $("fd-sub").textContent = `${rec.rocket} · ${rec.date}` + (rec.createdAt ? ` · armed ${new Date(rec.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "");
+
+  const kv = (label, [v, u], cls = "") => `<div class="kv"><span class="label">${label}</span><span class="v ${cls}">${v}<small>${u}</small></span></div>`;
+  const tt = rec.t;
+  const rel = (x) => (x !== null && tt.liftoff !== null) ? [(x - tt.liftoff).toFixed(1), "s"] : ["--", ""];
+  $("fd-stats").innerHTML = [
+    kv("Apogee", s.apogee_cm !== null && s.apogee_cm !== undefined ? fmt.alt(s.apogee_cm) : ["--", ""]),
+    kv("Time to apogee", s.apogee_t !== null && s.apogee_t !== undefined ? [s.apogee_t.toFixed(1), "s"] : ["--", ""]),
+    kv("Max speed", s.maxVz_cms !== undefined ? fmt.speed(s.maxVz_cms) : ["--", ""]),
+    kv("Max accel", s.maxAccel_mg !== undefined ? [(s.maxAccel_mg / 1000).toFixed(1), "g"] : ["--", ""]),
+    kv("Drogue descent", s.drogue_cms !== null && s.drogue_cms !== undefined ? fmt.speed(s.drogue_cms) : ["--", ""]),
+    kv("Main descent", s.main_cms !== null && s.main_cms !== undefined ? fmt.speed(s.main_cms) : ["--", ""]),
+    kv("Flight time", s.flightTime_s !== null && s.flightTime_s !== undefined ? [s.flightTime_s.toFixed(1), "s"] : ["in progress", ""]),
+    kv("Drift from pad", s.drift_m !== null && s.drift_m !== undefined ? fmt.dist(s.drift_m) : ["--", ""]),
+    kv("Landed", rel(tt.landed)),
+    kv("Recovered", tt.recovered !== null ? [`${((tt.recovered - (tt.landed ?? tt.recovered)) / 60).toFixed(0)}`, "min after landing"] : ["not yet", ""]),
+  ].join("");
+
+  drawChart($("post-chart"), r.history, { apogee: r.apogee, emptyText: "Altitude profile appears after liftoff" });
+
+  const total = r.rx + r.lost;
   const kv2 = (label, v) => `<div class="kv"><span class="label">${label}</span><span class="v">${v}</span></div>`;
   $("post-link").innerHTML = [
-    kv2("Packets received", receiver.rx.toLocaleString()),
-    kv2("Packets lost", `${receiver.lost.toLocaleString()}<small>${total ? (receiver.lossPct()).toFixed(1) + "%" : ""}</small>`),
-    kv2("Bad CRC", receiver.crcErrors),
-    kv2("Baro samples rejected", receiver.rejectedSamples),
-    kv2("RSSI avg / min", receiver.rssi.n ? `${(receiver.rssi.sum / receiver.rssi.n).toFixed(0)} / ${receiver.rssi.min}<small>dBm</small>` : "--"),
+    kv2("Packets received", r.rx.toLocaleString()),
+    kv2("Packets lost", `${r.lost.toLocaleString()}<small>${total ? r.lossPct().toFixed(1) + "%" : ""}</small>`),
+    kv2("Bad CRC", r.crcErrors),
+    kv2("Baro samples rejected", r.rejectedSamples),
+    kv2("RSSI avg / min", r.rssi.n ? `${(r.rssi.sum / r.rssi.n).toFixed(0)} / ${r.rssi.min}<small>dBm</small>` : "--"),
+    kv2("Recovery", rec.recovery ? (rec.recovery.how === "position" ? "you reached it" : rec.recovery.how === "handling" ? "rocket was picked up" : "marked by hand") : "--"),
   ].join("");
-  renderLog($("post-log"));
+
+  const coords = [];
+  if (rec.padFix) coords.push(`<span>Pad</span><span>${rec.padFix.lat.toFixed(6)}, ${rec.padFix.lon.toFixed(6)}</span>`);
+  if (rec.landing) coords.push(`<span>Landing</span><span>${rec.landing.lat.toFixed(6)}, ${rec.landing.lon.toFixed(6)}</span>`);
+  if (rec.recovery && rec.recovery.lat) coords.push(`<span>Recovery</span><span>${rec.recovery.lat.toFixed(6)}, ${rec.recovery.lon.toFixed(6)}</span>`);
+  $("fd-coords").innerHTML = coords.join("") || `<span>GPS</span><span style="color:var(--muted)">no fixes recorded</span>`;
+
+  const saved = receiver;
+  receiver = r; renderLog($("post-log")); receiver = saved;
+
+  $("fd-mark").hidden = rec.status !== "landed";
+  $("fd-frames").textContent = `${rec.frames.length} frames stored (${(rec.frames.length * 46 / 1024).toFixed(0)} KB of telemetry)`;
 }
+
+function downloadText(name, text, type) {
+  try {
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    return true;
+  } catch (e) { return false; }
+}
+
+function safeFile(name) { return name.replace(/[^a-z0-9#_-]+/gi, "_").replace(/^_+|_+$/g, ""); }
 
 /* ---- ground station ---- */
 /* The GS screen is drawn by GroundStationUI (gs-ui.js) from a model the
@@ -3039,9 +3540,12 @@ function buildGSModel(clock) {
     lat: receiver.gs.lat, lon: receiver.gs.lon,
     compassOk: true,
   };
+  const openRec = flights.open;
   return {
     rx, gs,
-    logs: flightLogs.map((l) => ({ name: l.name, apogee_cm: l.apogee_cm, duration: l.duration, frames: l.frames.length })),
+    logs: flights.records.map((l) => ({ name: l.name, status: l.status, apogee_cm: l.stats ? l.stats.apogee_cm : null, duration: l.stats ? l.stats.flightTime_s : null, frames: l.frames.length, date: l.date })),
+    flight: openRec ? { name: openRec.name, status: openRec.status } : null,
+    unrecovered: flights.unrecovered() ? flights.unrecovered().name : null,
     replay: replay !== null,
     replayIndex: replay ? replay.index : -1,
     sdPresent: false,
@@ -3090,7 +3594,6 @@ function wire() {
     if (!sim) return;
     const nowArmed = !sim.armed;
     sim.arm(nowArmed);
-    if (sim.armed && !recording) startRecording();
     $("btn-arm").textContent = sim.armed ? "Disarm" : "Arm";
     $("btn-arm").classList.toggle("on", sim.armed);
     $("btn-launch").disabled = !sim.armed;
@@ -3146,6 +3649,45 @@ function wire() {
     if (!name) return;
     keysDown.delete(name); release(name);
   });
+  $("gs-walk").addEventListener("click", () => {
+    gsHardware.walking = !gsHardware.walking;
+    $("gs-walk").classList.toggle("on", gsHardware.walking);
+  });
+  $("f-pickup").addEventListener("click", () => {
+    if (!sim) return;
+    sim.handling = !sim.handling;
+    $("f-pickup").classList.toggle("on", sim.handling);
+  });
+  /* flights tab */
+  $("flight-name").addEventListener("change", (e) => { if (flights.open) flights.rename(flights.open.id, e.target.value); });
+  $("fd-back").addEventListener("click", () => { viewFlightId = null; renderAll(true); });
+  $("fd-title").addEventListener("change", (e) => { if (viewFlightId) flights.rename(viewFlightId, e.target.value); });
+  $("fd-csv").addEventListener("click", () => {
+    const rec = flights.records.find((r) => r.id === viewFlightId); if (!rec) return;
+    if (!downloadText(`${safeFile(rec.name)}.csv`, flights.toCSV(rec), "text/csv")) $("fd-export-note").textContent = "Download blocked here. Works on the GitHub Pages link and on the real phone.";
+  });
+  $("fd-json").addEventListener("click", () => {
+    const rec = flights.records.find((r) => r.id === viewFlightId); if (!rec) return;
+    if (!downloadText(`${safeFile(rec.name)}.json`, flights.toJSON(rec), "application/json")) $("fd-export-note").textContent = "Download blocked here. Works on the GitHub Pages link and on the real phone.";
+  });
+  $("fd-replay").addEventListener("click", () => {
+    const i = flights.records.findIndex((r) => r.id === viewFlightId); if (i < 0) return;
+    startReplay(i); showTab("flight"); gsui.screen = "flight";
+  });
+  $("fd-mark").addEventListener("click", () => {
+    if (!viewFlightId) return;
+    flights.markRecovered(viewFlightId, sim ? sim.t : 0, { lat: gsHardware.lat, lon: gsHardware.lon });
+    renderAll(true);
+  });
+  $("fd-delete").addEventListener("click", () => {
+    const row = $("fd-delete-confirm"); row.hidden = !row.hidden;
+  });
+  $("fd-delete-yes").addEventListener("click", () => {
+    if (viewFlightId) flights.remove(viewFlightId);
+    viewFlightId = null; $("fd-delete-confirm").hidden = true; renderAll(true);
+  });
+  $("fd-delete-no").addEventListener("click", () => { $("fd-delete-confirm").hidden = true; });
+  flights.onChange = () => { if (currentTab === "post") renderPost(); };
   $("gs-heading").addEventListener("input", (e) => {
     gsHardware.heading = parseInt(e.target.value, 10);
     $("gs-heading-val").textContent = `${String(gsHardware.heading).padStart(3, "0")}°`;
@@ -3188,6 +3730,7 @@ gsui = new GroundStationUI({
   reloadPyro: () => { if (sim) sim.reloadPyro(); },
   replay: (i) => startReplay(i),
   stopReplay: () => stopReplay(),
+  setFlightName: (name) => { if (flights.open) flights.rename(flights.open.id, name); },
   setProfile: (id) => {
     if (sim && (sim.state > 1)) return;   /* only on the pad, disarmed */
     profile = PROFILES[id];
