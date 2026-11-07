@@ -96,11 +96,13 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
 /* ---- control strip ------------------------------------------------------ */
 .controls {
   display: grid; gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: 1fr;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 12px;
 }
 .ctl-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ctl-group.main { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.ctl-group.main > .label { display: none; }
 .ctl-group .label { margin-bottom: -2px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .btn {
@@ -128,7 +130,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none; }
 .toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
 @media (min-width: 760px) {
-  .ctl-group.site { grid-column: span 2; }
+  .ctl-more-grid .ctl-group.site { grid-column: span 2; }
   .ctl-group.site .site-grid { grid-template-columns: repeat(3, auto minmax(0, 1fr)); }
 }
 .site-grid { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 12px; }
@@ -184,6 +186,14 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 .phone-tabs button.on { color: var(--accent); }
 .unit-btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: var(--muted); }
 
+.link-band { background: var(--bad); color: #140506; font-weight: 800; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; text-align: center; padding: 5px 10px; }
+.phone.stale .big .v, .phone.stale .kv .v, .phone.stale .check-item .val, .phone.stale .compass .dist, .phone.stale .coords { opacity: 0.45; transition: opacity 300ms; }
+.gps-stale { color: var(--warn) !important; }
+.btn.small { padding: 5px 10px; font-size: 12px; }
+.ctl-more { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 8px; }
+.ctl-more summary { cursor: pointer; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; user-select: none; }
+.ctl-more summary:hover { color: var(--fg); }
+.ctl-more-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-top: 10px; }
 .link-line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .link-line .bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; }
 .link-line .bars i { width: 3px; background: var(--faint); border-radius: 1px; }
@@ -246,12 +256,21 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 .map-layers { background: rgba(10,14,19,0.85); }
 .map-follow { padding: 5px 10px; font-size: 12px; background: rgba(10,14,19,0.85); }
 .map-note { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgba(10,14,19,0.9); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
-.map-marker { width: 16px; height: 16px; cursor: pointer; }
-.map-marker i { position: absolute; inset: 0; display: block; background: var(--mk); border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,0.6); }
-.map-marker.dot i { border-radius: 50%; }
-.map-marker.square i { border-radius: 2px; }
-.map-marker.triangle i { clip-path: polygon(50% 0, 100% 100%, 0 100%); border: 0; box-shadow: none; }
-.map-marker span { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font: 700 11px var(--font-ui); color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; }
+.map-marker { width: 18px; height: 18px; cursor: pointer; }
+.map-marker i { position: absolute; inset: 0; display: block; background: var(--mk); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.7); }
+.map-marker.rocket i { border-radius: 50%; }
+.map-marker.rocket.live i::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--mk); opacity: 0.8; animation: mk-pulse 1.6s ease-out infinite; }
+@keyframes mk-pulse { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(1.8); opacity: 0; } }
+.map-marker.you i { border-radius: 50%; background: #fff; border: 4px solid var(--mk); }
+.map-marker.pad i { clip-path: polygon(50% 0, 100% 100%, 0 100%); border: 0; box-shadow: none; width: 18px; height: 16px; top: 2px; }
+.map-marker.apogee { width: 12px; height: 12px; }
+.map-marker.apogee i { transform: rotate(45deg); border-radius: 2px; }
+.map-marker .tag { position: absolute; top: 100%; left: 50%; transform: translate(-50%, 5px); font: 700 11px var(--font-ui); color: #fff; background: rgba(10,14,19,0.85); border: 1px solid rgba(255,255,255,0.15); border-radius: 999px; padding: 2px 7px; white-space: nowrap; letter-spacing: 0.02em; }
+.map-marker.apogee .tag { color: var(--mk); }
+.map-marker.pad .tag { top: auto; bottom: 100%; transform: translate(-50%, -4px); }
+.map-marker.rocket .tag { color: var(--mk); }
+.map-marker.dist { width: 0; height: 0; pointer-events: none; }
+.map-marker.dist .tag { top: 0; transform: translate(-50%, -50%); color: var(--mk); font-family: var(--font-num); font-weight: 600; }
 .maplibregl-ctrl-attrib { font-size: 10px !important; background: rgba(10,14,19,0.7) !important; color: var(--muted) !important; }
 .maplibregl-ctrl-attrib a { color: var(--muted) !important; }
 .maplibregl-popup-content { background: var(--panel) !important; color: var(--fg) !important; font-family: var(--font-num); font-size: 12px; border: 1px solid var(--line); border-radius: 8px !important; padding: 8px 10px !important; }
@@ -336,7 +355,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 </header>
 
 <section class="controls" aria-label="Simulator controls">
-  <div class="ctl-group">
+  <div class="ctl-group main">
     <span class="label">Rocket</span>
     <div class="row">
       <select id="profile" aria-label="Flight profile">
@@ -360,6 +379,9 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
     </div>
   </div>
 
+  <details class="ctl-more">
+    <summary>Faults and site</summary>
+    <div class="ctl-more-grid">
   <div class="ctl-group">
     <span class="label">Fault injection</span>
     <div class="row">
@@ -384,6 +406,9 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
     </div>
     <span class="note">Site changes apply on Reset. The ground station position is the receiver's own GPS in the real system.</span>
   </div>
+
+    </div>
+  </details>
 
   <div class="raw" aria-live="off">
     <span class="label">Last frame</span>
@@ -418,6 +443,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
         <button class="unit-btn" id="unit-btn" title="Switch units">ft</button>
         <span class="state-pill" id="ph-state">pad</span>
       </div>
+      <div class="link-band" id="link-band" hidden>NO LINK</div>
 
       <!-- PAD -->
       <div class="phone-body" id="tab-pad">
@@ -458,7 +484,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
         <canvas class="chart" id="fl-chart" width="358" height="150"></canvas>
         <div class="two">
           <div class="kv"><span class="label">Vertical speed</span><span class="v" id="fl-vz">0<small>ft/s</small></span></div>
-          <div class="kv"><span class="label">Max altitude</span><span class="v" id="fl-max">0<small>ft</small></span></div>
+          <div class="kv"><span class="label">Max altitude</span><span class="v" id="fl-max">0<small>ft</small></span><span class="note num" id="fl-max-at"></span></div>
         </div>
         <div class="three">
           <div class="kv"><span class="label">Accel</span><span class="v" id="fl-acc">1.0<small>g</small></span></div>
@@ -549,7 +575,8 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
             <h3>Flight summary</h3>
             <div class="stat-grid" id="fd-stats"></div>
           </div>
-          <canvas class="chart tall" id="post-chart" width="358" height="200"></canvas>
+          <canvas class="chart tall" id="post-chart" width="358" height="220"></canvas>
+          <div class="row" style="justify-content:flex-end"><button class="btn small" id="fd-vz">Show vertical speed</button></div>
           <div class="card">
             <h3>Positions</h3>
             <div class="coords" id="fd-coords"></div>
@@ -1354,6 +1381,21 @@ class FlightSim {
  */
 
 
+/* Frames are stored as base64 (64 characters per 46-byte frame) instead of
+ * hex (92). Old records in hex still load. */
+function frameToStore(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function frameFromStore(str) {
+  if (str.length === 92 && /^[0-9a-f]+$/i.test(str)) return fromHex(str);
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 const LANDED_TAIL_S = 5;   /* keep recording this long after landing */
 
 const STORAGE_KEY = "fc.flights.v1";
@@ -1491,7 +1533,7 @@ class FlightStore {
       return;
     }
 
-    r.frames.push([Math.round(clock * 1000) / 1000, toHex(frameBytes)]);
+    r.frames.push([Math.round(clock * 100) / 100, frameToStore(frameBytes)]);
 
     if (r.status === "armed" && p.state >= STATE.BOOST) {
       r.status = "flight";
@@ -1527,7 +1569,7 @@ class FlightStore {
   replayInto(record, ReceiverClass, gs) {
     const rx = new ReceiverClass();
     if (gs) { rx.gs.lat = gs.lat; rx.gs.lon = gs.lon; }
-    for (const [c, h] of record.frames) rx.feed(fromHex(h), c);
+    for (const [c, h] of record.frames) rx.feed(frameFromStore(h), c);
     return rx;
   }
 
@@ -1537,7 +1579,7 @@ class FlightStore {
     const rows = [head.join(",")];
     let t0 = null;
     for (const [c, h] of record.frames) {
-      const r = decode(fromHex(h));
+      const r = decode(frameFromStore(h));
       if (!r.ok) continue;
       const p = r.packet;
       if (t0 === null) t0 = c;
@@ -1609,8 +1651,8 @@ function browserStorage() {
 /* ---- colours (RGB888 here, RGB565 on the chip) ----------------------- */
 const C = Object.freeze({
   BLACK: "#000000", WHITE: "#ffffff", GREY: "#9a9a9a", DGREY: "#3a3a3a", DDGREY: "#1c1c1c",
-  GREEN: "#30d870", AMBER: "#ffb020", RED: "#ff4040", BLUE: "#58c4ff", PURPLE: "#c9a0ff",
-  ORANGE: "#ff7a40", DGREEN: "#0c3d20", DAMBER: "#3d2a00", DRED: "#3d0c0c",
+  GREEN: "#3ddc84", AMBER: "#ffb020", RED: "#ff5a5f", BLUE: "#5cc8ff", PURPLE: "#c9a6ff",
+  ORANGE: "#ff7a45", DGREEN: "#0c3d20", DAMBER: "#3d2a00", DRED: "#3d0c0c",
 });
 
 const SCREENS = ["flight", "pad", "recovery", "post", "settings", "tests", "log"];
@@ -1921,6 +1963,7 @@ class GroundStationUI {
       case "log": this._log(d); break;
     }
     this._footer(d);
+    this._linkBand(d);
     if (this.toast) {
       d.fillRect(0, 40, 480, 26, C.AMBER);
       d.text(240, 44, this.toast.text, 16, C.BLACK, "center", false, true);
@@ -1939,7 +1982,14 @@ class GroundStationUI {
     const bg = linked ? STATE_BG[rx.state] : C.DGREY;
     d.fillRect(0, 0, 130, 40, bg);
     d.text(65, 9, linked ? GS_STATE_NAMES[rx.state] : "NO LINK", 20, linked ? C.BLACK : C.GREY, "center", false, true);
-    d.text(140, 11, SCREEN_TITLE[this.screen], 16, C.GREY, "left", false, true);
+    const fl = m ? m.flight : null;
+    if (fl) {
+      d.text(140, 4, SCREEN_TITLE[this.screen], 12, C.GREY, "left", false, true);
+      const nm = fl.name.length > 24 ? fl.name.slice(0, 23) + "…" : fl.name;
+      d.text(140, 19, nm, 14, C.AMBER, "left", false, true);
+    } else {
+      d.text(140, 11, SCREEN_TITLE[this.screen], 16, C.GREY, "left", false, true);
+    }
     /* link quality */
     const x0 = 356;
     const n = linked && rx.age < 3 ? (rx.rssi > -70 ? 5 : rx.rssi > -85 ? 4 : rx.rssi > -95 ? 3 : rx.rssi > -105 ? 2 : 1) : 0;
@@ -1947,11 +1997,14 @@ class GroundStationUI {
     d.text(392, 12, linked ? `${rx.rssi}` : "--", 14, C.GREY, "left", true);
     const ageCol = !linked ? C.RED : rx.age > 2 ? C.RED : rx.age > 0.6 ? C.AMBER : C.GREY;
     d.text(474, 12, linked ? `${rx.age.toFixed(1)}s` : "--", 14, ageCol, "right", true);
-    /* ground station's own battery in the corner */
-    const gs = m ? m.gs : null;
-    if (gs) {
-      d.text(345, 12, `${gs.battery.toFixed(2)}V`, 12, gs.battery < 3.5 ? C.RED : C.DGREY, "right", true);
-    }
+  }
+
+  /* link lost band over the top of the screen content: the one thing you must not miss */
+  _linkBand(d) {
+    const rx = this.model ? this.model.rx : null;
+    if (!rx || !rx.hasPacket || rx.age <= 2) return;
+    d.fillRect(0, 40, 480, 22, C.RED);
+    d.text(240, 44, `LINK LOST   showing data from ${rx.age > 999 ? "long" : rx.age.toFixed(0) + " s"} ago`, 14, C.BLACK, "center", false, true);
   }
 
   _footer(d) {
@@ -2169,8 +2222,9 @@ class GroundStationUI {
     });
     const gs = this.model ? this.model.gs : null;
     if (gs) {
-      d.drawLine(10, 262, 470, 262, C.DDGREY);
-      d.text(20, 270, `Ground station GPS: ${gs.gpsFix ? `3D fix, ${gs.gpsSats} sats, ${gs.lat.toFixed(5)} ${gs.lon.toFixed(5)}` : "no fix"}`, 13, C.GREY, "left", true);
+      d.drawLine(10, 258, 470, 258, C.DDGREY);
+      d.text(20, 264, `Ground station GPS: ${gs.gpsFix ? `3D fix, ${gs.gpsSats} sats, ${gs.lat.toFixed(5)} ${gs.lon.toFixed(5)}` : "no fix"}`, 13, C.GREY, "left", true);
+      d.text(20, 280, `Ground station battery: ${gs.battery.toFixed(2)} V`, 13, gs.battery < 3.5 ? C.RED : C.GREY, "left", true);
     }
   }
 
@@ -2444,8 +2498,16 @@ class Receiver {
 /* Units and formatting                                                    */
 /* ====================================================================== */
 
-let imperial = true;
+/* per-viewer conveniences, remembered between visits (fails soft) */
+const prefs = (() => { try { return JSON.parse(localStorage.getItem("fc.prefs") || "{}"); } catch (e) { return {}; } })();
+function savePrefs() { try { localStorage.setItem("fc.prefs", JSON.stringify(prefs)); } catch (e) { /* ignore */ } }
+let imperial = prefs.imperial !== undefined ? !!prefs.imperial : true;
 const M_PER_FT = 0.3048;
+
+/* DOM writes only when the value changed: the phone redraws 20 times a
+ * second, and most of the time nothing on a given element moved */
+function setText(el, text) { const t = String(text); if (el._t !== t) { el._t = t; el.textContent = t; } }
+function setHTML(el, html) { if (el._h !== html) { el._h = html; el.innerHTML = html; } }
 
 const fmt = {
   alt(cm) {                 /* -> [value, unit] */
@@ -2472,7 +2534,7 @@ const fmt = {
 };
 
 function setBig(el, [v, u]) {
-  el.innerHTML = `${v}<small>${u}</small>`;
+  setHTML(el, `${v}<small>${u}</small>`);
 }
 
 const STATE_COLOR = {
@@ -2505,10 +2567,20 @@ function setAge(el, age) {
 /* Chart: altitude vs flight time                                          */
 /* ====================================================================== */
 
+/* Short labels for the event ticks under the chart */
+const EVENT_LABEL = { 3: "boost", 4: "burnout", 5: "apogee", 6: "drogue", 7: "main", 8: "landed" };
+const PHASE_SHADE = { 3: 0.10, 4: 0.05, 5: 0.0, 6: 0.06, 7: 0.03, 8: 0.0 };
+
+/* Altitude (and optionally vertical speed) against flight time.
+ * Redraws only when the data, the units or the size changed. */
 function drawChart(canvas, history, opts = {}) {
   const dpr = window.devicePixelRatio || 1;
   const cssW = canvas.clientWidth || canvas.width;
   const cssH = canvas.clientHeight || canvas.height;
+  const events = opts.events || [];
+  const sig = `${history.length}|${history.length ? history[history.length - 1].t : 0}|${imperial}|${cssW}x${cssH}|${events.length}|${opts.vz ? 1 : 0}|${opts.apogee ? opts.apogee.alt_cm : ""}`;
+  if (canvas._sig === sig) return;
+  canvas._sig = sig;
   if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
     canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
   }
@@ -2519,8 +2591,10 @@ function drawChart(canvas, history, opts = {}) {
   const colLine = cs.getPropertyValue("--line").trim();
   const colMuted = cs.getPropertyValue("--muted").trim();
   const colData = cs.getPropertyValue("--data").trim();
+  const colAccent = cs.getPropertyValue("--accent").trim();
+  const colFg = cs.getPropertyValue("--fg").trim();
   const colBg = cs.getPropertyValue("--bg").trim();
-  const padL = 44, padR = 10, padT = 10, padB = 22;
+  const padL = 44, padR = opts.vz ? 40 : 10, padT = 10, padB = events.length ? 40 : 22;
 
   ctx.fillStyle = colBg;
   ctx.fillRect(0, 0, W, H);
@@ -2535,11 +2609,21 @@ function drawChart(canvas, history, opts = {}) {
 
   const toUnit = (cm) => imperial ? cm / 100 / M_PER_FT : cm / 100;
   const tMax = Math.max(history[history.length - 1].t, 10);
-  let aMax = 0;
-  for (const h of history) aMax = Math.max(aMax, toUnit(h.alt_cm));
+  let aMax = 0, vMax = 1;
+  for (const h of history) { aMax = Math.max(aMax, toUnit(h.alt_cm)); vMax = Math.max(vMax, Math.abs(toUnit(h.vz_cms))); }
   aMax = niceCeil(aMax * 1.08 || 100);
+  vMax = niceCeil(vMax * 1.1);
   const x = (t) => padL + (t / tMax) * (W - padL - padR);
   const y = (a) => padT + (1 - a / aMax) * (H - padT - padB);
+  const yv = (v) => padT + (1 - (v + vMax) / (2 * vMax)) * (H - padT - padB);
+
+  /* phase shading */
+  const ev = events.filter((e) => EVENT_LABEL[e.state]).sort((a, b) => a.t - b.t);
+  for (let i = 0; i < ev.length; i++) {
+    const t0 = ev[i].t, t1 = i + 1 < ev.length ? ev[i + 1].t : tMax;
+    const a = PHASE_SHADE[ev[i].state] || 0;
+    if (a > 0) { ctx.fillStyle = hexToRgba(colAccent, a); ctx.fillRect(x(t0), padT, x(t1) - x(t0), H - padT - padB); }
+  }
 
   /* grid */
   ctx.strokeStyle = colLine; ctx.lineWidth = 1;
@@ -2550,13 +2634,18 @@ function drawChart(canvas, history, opts = {}) {
     ctx.beginPath(); ctx.moveTo(padL, y(a)); ctx.lineTo(W - padR, y(a)); ctx.stroke();
     ctx.fillText(Math.round(a).toLocaleString(), padL - 6, y(a) + 3);
   }
+  if (opts.vz) {
+    ctx.textAlign = "left"; ctx.fillStyle = hexToRgba(colAccent, 0.9);
+    for (const v of [-vMax, 0, vMax]) ctx.fillText(`${v > 0 ? "+" : ""}${Math.round(v)}`, W - padR + 4, yv(v) + 3);
+    ctx.fillStyle = colMuted;
+  }
   ctx.textAlign = "center";
   const tStep = niceStep(tMax / 5);
   for (let t = 0; t <= tMax; t += tStep) {
-    ctx.fillText(`${Math.round(t)}s`, x(t), H - 6);
+    ctx.fillText(`${Math.round(t)}s`, x(t), H - padB + 12);
   }
 
-  /* area + line */
+  /* altitude area + line */
   ctx.beginPath();
   ctx.moveTo(x(history[0].t), y(Math.max(0, toUnit(history[0].alt_cm))));
   for (const h of history) ctx.lineTo(x(h.t), y(Math.max(0, toUnit(h.alt_cm))));
@@ -2565,6 +2654,12 @@ function drawChart(canvas, history, opts = {}) {
   ctx.closePath();
   ctx.fillStyle = hexToRgba(colData, 0.14);
   ctx.fill();
+
+  if (opts.vz) {
+    ctx.beginPath();
+    history.forEach((h, i) => { const px = x(h.t), py = yv(toUnit(h.vz_cms)); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
+    ctx.strokeStyle = hexToRgba(colAccent, 0.85); ctx.lineWidth = 1.5; ctx.stroke();
+  }
 
   ctx.beginPath();
   for (let i = 0; i < history.length; i++) {
@@ -2579,12 +2674,27 @@ function drawChart(canvas, history, opts = {}) {
   ctx.beginPath(); ctx.arc(x(lastP.t), y(Math.max(0, toUnit(lastP.alt_cm))), 3.5, 0, Math.PI * 2);
   ctx.fillStyle = colData; ctx.fill();
 
+  /* event ticks under the axis, labels alternate height so they do not collide */
+  if (ev.length) {
+    ctx.font = "9px Barlow, sans-serif";
+    let lastX = -100, row = 0;
+    ev.forEach((e) => {
+      const ex = x(e.t);
+      ctx.strokeStyle = colMuted; ctx.beginPath(); ctx.moveTo(ex, H - padB); ctx.lineTo(ex, H - padB + 4); ctx.stroke();
+      row = ex - lastX < 34 ? 1 - row : 0;
+      lastX = ex;
+      ctx.fillStyle = colFg; ctx.textAlign = "center";
+      ctx.fillText(EVENT_LABEL[e.state], Math.min(W - 16, Math.max(padL + 4, ex)), row ? H - 15 : H - 4);
+    });
+  }
+
   /* apogee marker */
   if (opts.apogee) {
     const ax = x(opts.apogee.t), ay = y(toUnit(opts.apogee.alt_cm));
     ctx.strokeStyle = colMuted; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, y(0)); ctx.stroke();
     ctx.setLineDash([]);
+    ctx.font = "10px 'JetBrains Mono', monospace";
     ctx.fillStyle = colMuted; ctx.textAlign = ax > W / 2 ? "right" : "left";
     ctx.fillText(`apogee ${Math.round(toUnit(opts.apogee.alt_cm)).toLocaleString()} ${imperial ? "ft" : "m"} @ ${opts.apogee.t.toFixed(1)}s`, ax + (ax > W / 2 ? -6 : 6), ay + 12);
   }
@@ -2631,9 +2741,10 @@ let speed = 1;
 let paused = false;
 let launched = false;
 let currentTab = "pad";
-let recoveryMode = "compass";
+let recoveryMode = prefs.recoveryMode === "map" ? "map" : "compass";
 let autoTabDone = { flight: false, recovery: false };
 let lastRender = 0;
+let lastGsRender = 0;
 
 function readSite() {
   site = {
@@ -2682,7 +2793,7 @@ function stepReplay(dt) {
   replay.clock += dt * 5;
   const fr = replay.record.frames;
   while (replay.next < fr.length && fr[replay.next][0] <= replay.clock) {
-    receiver.feed(fromHex(fr[replay.next][1]), fr[replay.next][0]);
+    receiver.feed(frameFromStore(fr[replay.next][1]), fr[replay.next][0]);
     replay.next++;
   }
 }
@@ -2736,6 +2847,7 @@ function loop(ts) {
     renderAll(false);
     lastRender = ts;
   }
+  if (ts - lastGsRender > 100) { renderGS(); lastGsRender = ts; }
   requestAnimationFrame(loop);
 }
 
@@ -2764,7 +2876,7 @@ function renderAll(force) {
 
   renderRaw();
   renderPhone(p, age, clock);
-  renderGS();
+  if (force) renderGS();
 }
 
 function renderRaw() {
@@ -2773,12 +2885,12 @@ function renderRaw() {
   const h = TELEMETRY_HEADER_SIZE * 2, pl = TELEMETRY_PAYLOAD_SIZE * 2;
   const head = hex.slice(0, h), body = hex.slice(h, h + pl), crc = hex.slice(h + pl);
   const spaced = body.match(/.{1,8}/g).join(" ");
-  $("raw-hex").innerHTML = `<b>${head}</b> ${spaced} <i>${crc}</i>` + (receiver.lastResult !== "ok" ? ` <span style="color:var(--bad)">rejected: ${receiver.lastResult}</span>` : "");
-  $("m-rx").textContent = receiver.rx;
-  $("m-lost").textContent = receiver.lost;
+  setHTML($("raw-hex"), `<b>${head}</b> ${spaced} <i>${crc}</i>` + (receiver.lastResult !== "ok" ? ` <span style="color:var(--bad)">rejected: ${receiver.lastResult}</span>` : ""));
+  setText($("m-rx"), receiver.rx);
+  setText($("m-lost"), receiver.lost);
   $("m-lost").parentElement.classList.toggle("bad", receiver.lost > 0);
-  $("m-crc").textContent = receiver.crcErrors;
-  $("m-rate").textContent = receiver.rateHz().toFixed(1);
+  setText($("m-crc"), receiver.crcErrors);
+  setText($("m-rate"), receiver.rateHz().toFixed(1));
 }
 
 function stateLabel(p) {
@@ -2787,17 +2899,23 @@ function stateLabel(p) {
 
 function renderPhone(p, age, clock) {
   const statePill = $("ph-state");
-  statePill.textContent = stateLabel(p);
+  setText(statePill, stateLabel(p));
   statePill.style.background = p ? STATE_COLOR[p.state] : "var(--faint)";
-  $("unit-btn").textContent = imperial ? "ft" : "m";
+  setText($("unit-btn"), imperial ? "ft" : "m");
 
   const rssi = p ? p.rssi_dbm : null;
   for (const id of ["ph", "fl", "rc"]) {
     setBars($(`${id}-bars`), rssi, age);
     setAge($(`${id}-age`), age);
   }
-  $("ph-rssi").textContent = rssi === null ? "-- dBm" : `${rssi} dBm`;
-  $("rc-rssi").textContent = $("ph-rssi").textContent;
+  /* link lost: a band everyone sees, and the live numbers dim */
+  const lost = age === null || age > 2;
+  const band = $("link-band");
+  band.hidden = !lost || (!p && !launched && age === null && receiver.rx === 0 && false);
+  if (lost) setText(band, age === null ? "NO LINK: waiting for the first packet" : `LINK LOST: showing last data from ${age.toFixed(0)} s ago`);
+  $("phone").classList.toggle("stale", lost && !!p);
+  setText($("ph-rssi"), rssi === null ? "-- dBm" : `${rssi} dBm`);
+  setText($("rc-rssi"), $("ph-rssi").textContent);
 
   if (currentTab === "pad") renderPad(p, age);
   if (currentTab === "flight") renderFlight(p);
@@ -2851,7 +2969,7 @@ function renderPad(p, age) {
     const label = ch === 0 ? "1 drogue" : ch === 1 ? "2 main" : `${ch + 1}`;
     cells.push(`<div class="pyro ${cls}"><div class="ch">${label}</div><div class="st">${txt}</div></div>`);
   }
-  $("pyro-row").innerHTML = cells.join("");
+  setHTML($("pyro-row"), cells.join(""));
 
   /* flight record: name it while armed on the pad */
   const nameCard = $("flight-name-card");
@@ -2866,19 +2984,23 @@ function renderPad(p, age) {
 
   const c = $("pad-coords");
   if (p && p.gps_fix === GPS_FIX.FIX_3D) {
-    c.innerHTML = `<span>Lat</span><span>${fmt.deg(p.gps_lat_e7)}</span><span>Lon</span><span>${fmt.deg(p.gps_lon_e7)}</span><span>MSL</span><span>${fmt.alt(p.gps_alt_mm / 10).join(" ")}</span>`;
+    setHTML(c, `<span>Lat</span><span>${fmt.deg(p.gps_lat_e7)}</span><span>Lon</span><span>${fmt.deg(p.gps_lon_e7)}</span><span>MSL</span><span>${fmt.alt(p.gps_alt_mm / 10).join(" ")}</span>`);
+  } else if (receiver.lastFix) {
+    const f = receiver.lastFix;
+    setHTML(c, `<span>Lat</span><span class="gps-stale">${fmt.deg(f.lat_e7)}</span><span>Lon</span><span class="gps-stale">${fmt.deg(f.lon_e7)}</span><span>Fix</span><span class="gps-stale">lost, last ${((sim ? sim.t : 0) - f.clock).toFixed(0)} s ago</span>`);
   } else {
-    c.innerHTML = `<span>GPS</span><span style="color:var(--muted)">waiting for fix</span>`;
+    setHTML(c, `<span>GPS</span><span style="color:var(--muted)">waiting for fix</span>`);
   }
 }
 
 function renderFlight(p) {
   if (!p) return;
   const t = receiver.flightTime(p.time_ms);
-  $("fl-tplus").innerHTML = `T+ <b>${Math.max(0, t).toFixed(1)}</b> s`;
+  setHTML($("fl-tplus"), `T+ <b>${Math.max(0, t).toFixed(1)}</b> s`);
   setBig($("fl-alt"), fmt.alt(p.altitude_agl_cm));
   setBig($("fl-vz"), fmt.speed(p.vertical_vel_cms));
   setBig($("fl-max"), fmt.alt(receiver.maxAlt_cm));
+  setText($("fl-max-at"), receiver.apogee && receiver.launchTimeMs !== null ? `at T+${receiver.apogee.t.toFixed(1)} s` : "");
   const acc = Math.hypot(p.accel_x_mg, p.accel_y_mg, p.accel_z_mg) / 1000;
   setBig($("fl-acc"), [acc.toFixed(1), "g"]);
   setBig($("fl-tilt"), [p.tilt_deg, "°"]);
@@ -2887,7 +3009,8 @@ function renderFlight(p) {
   bEl.classList.toggle("warn", p.battery_mv < 3700 && p.battery_mv >= 3500);
   bEl.classList.toggle("bad", p.battery_mv < 3500);
   const landEvF = receiver.events.find((e) => e.state === STATE.LANDED);
-  drawChart($("fl-chart"), landEvF ? receiver.history.filter((h) => h.t <= landEvF.t + 2) : receiver.history, { apogee: p.state >= STATE.APOGEE ? receiver.apogee : null });
+  drawChart($("fl-chart"), landEvF ? receiver.history.filter((h) => h.t <= landEvF.t + 2) : receiver.history,
+    { apogee: p.state >= STATE.APOGEE ? receiver.apogee : null, events: receiver.events.filter((e) => e.state >= STATE.BOOST) });
   renderLog($("fl-log"));
 }
 
@@ -2907,24 +3030,26 @@ function renderRecovery(p, clock) {
   if (to) {
     $("needle").setAttribute("transform", `rotate(${to.brg.toFixed(1)} 120 120)`);
     const [dv, du] = fmt.dist(to.dist);
-    $("cmp-dist").textContent = dv;
-    $("cmp-unit").textContent = du.toUpperCase();
-    $("cmp-brg").textContent = `${Math.round(to.brg).toString().padStart(3, "0")}°`;
+    setText($("cmp-dist"), dv);
+    setText($("cmp-unit"), du.toUpperCase());
+    setText($("cmp-brg"), `${Math.round(to.brg).toString().padStart(3, "0")}°`);
   } else {
-    $("cmp-dist").textContent = "--";
-    $("cmp-brg").textContent = "---°";
+    setText($("cmp-dist"), "--");
+    setText($("cmp-brg"), "---°");
   }
   const c = $("rc-coords");
   const f = receiver.lastFix;
   if (f) {
-    c.innerHTML = `<span>Lat</span><span>${fmt.deg(f.lat_e7)}</span><span>Lon</span><span>${fmt.deg(f.lon_e7)}</span><span>MSL</span><span>${fmt.alt(f.alt_mm / 10).join(" ")}</span>`;
+    const live = p && p.gps_fix === GPS_FIX.FIX_3D;
+    const cls = live ? "" : ' class="gps-stale"';
+    setHTML(c, `<span>Lat</span><span${cls}>${fmt.deg(f.lat_e7)}</span><span>Lon</span><span${cls}>${fmt.deg(f.lon_e7)}</span><span>MSL</span><span${cls}>${fmt.alt(f.alt_mm / 10).join(" ")}</span>`);
     const fixAge = clock - f.clock;
     const fa = $("rc-fixage");
-    fa.textContent = fixAge < 60 ? `${fixAge.toFixed(0)} s ago` : `${(fixAge / 60).toFixed(1)} min ago`;
+    setText(fa, fixAge < 60 ? `${fixAge.toFixed(0)} s ago` : `${(fixAge / 60).toFixed(1)} min ago`);
     fa.classList.toggle("warn", fixAge > 5);
   } else {
-    c.innerHTML = `<span>GPS</span><span style="color:var(--muted)">no fix received yet</span>`;
-    $("rc-fixage").textContent = "--";
+    setHTML(c, `<span>GPS</span><span style="color:var(--muted)">no fix received yet</span>`);
+    setText($("rc-fixage"), "--");
   }
   if (p) setBig($("rc-alt"), fmt.alt(p.altitude_agl_cm));
   $("cmp-note").textContent = to && to.dist < 15
@@ -3002,15 +3127,19 @@ const liveMap = {
       const empty = { type: "FeatureCollection", features: [] };
       this.map.addSource("track", { type: "geojson", data: empty });
       this.map.addSource("bearing", { type: "geojson", data: empty });
-      this.map.addLayer({ id: "track-halo", type: "line", source: "track", paint: { "line-color": "#000", "line-width": 5, "line-opacity": 0.6 }, layout: { "line-cap": "round", "line-join": "round" } });
-      this.map.addLayer({ id: "track", type: "line", source: "track", paint: { "line-color": ["get", "color"], "line-width": 3 }, layout: { "line-cap": "round", "line-join": "round" } });
-      this.map.addLayer({ id: "bearing", type: "line", source: "bearing", paint: { "line-color": "#ffb020", "line-width": 2, "line-dasharray": [2, 2] } });
+      this.map.addLayer({ id: "track-halo", type: "line", source: "track", paint: { "line-color": "#000", "line-width": 7, "line-opacity": 0.55, "line-blur": 1 }, layout: { "line-cap": "round", "line-join": "round" } });
+      this.map.addLayer({ id: "track", type: "line", source: "track", paint: { "line-color": ["get", "color"], "line-width": 3.5 }, layout: { "line-cap": "round", "line-join": "round" } });
+      this.map.addLayer({ id: "track-core", type: "line", source: "track", paint: { "line-color": "#fff", "line-width": 1, "line-opacity": 0.5 }, layout: { "line-cap": "round", "line-join": "round" } });
+      this.map.addLayer({ id: "bearing-halo", type: "line", source: "bearing", paint: { "line-color": "#000", "line-width": 4, "line-opacity": 0.5 } });
+      this.map.addLayer({ id: "bearing", type: "line", source: "bearing", paint: { "line-color": "#ffb020", "line-width": 2, "line-dasharray": [1.5, 1.5] } });
       /* markers are plain HTML elements: no font files needed, so they
        * work offline on the ESP32 exactly like here */
       this.markers = {
-        you: this._marker("you", "#3ddc84", "square"),
-        pad: this._marker("pad", "#8b9bb0", "triangle"),
-        rocket: this._marker("rocket", "#ffb020", "dot"),
+        you: this._marker("you", "#3ddc84", "you"),
+        pad: this._marker("pad", "#8b9bb0", "pad"),
+        apogee: this._marker("apogee", "#c9a6ff", "apogee"),
+        rocket: this._marker("rocket", "#ffb020", "rocket"),
+        dist: this._marker("", "#ffb020", "dist"),
       };
       this.ready = true;
       this.lastUpdate = -1;
@@ -3122,10 +3251,17 @@ const liveMap = {
     const el = document.createElement("div");
     el.className = `map-marker ${shape}`;
     el.style.setProperty("--mk", color);
-    el.innerHTML = `<i></i><span>${label}</span>`;
-    const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "220px", offset: 14 });
-    const mk = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([0, 0]).setPopup(popup);
-    mk.info = (html) => popup.setHTML(html);
+    el.innerHTML = shape === "dist" ? `<span class="tag"></span>` : `<i></i><span class="tag">${label}</span>`;
+    const mk = new maplibregl.Marker({ element: el, anchor: shape === "pad" ? "bottom" : "center" }).setLngLat([0, 0]);
+    if (shape !== "dist") {
+      const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "240px", offset: 16 });
+      mk.setPopup(popup);
+      mk.info = (html) => popup.setHTML(html);
+    } else {
+      mk.info = (text) => { const t = el.querySelector(".tag"); if (t._t !== text) { t._t = text; t.textContent = text; } };
+    }
+    mk.setLabel = (text) => { const t = el.querySelector(".tag"); if (t && t._t !== text) { t._t = text; t.textContent = text; } };
+    mk.setLive = (on) => el.classList.toggle("live", !!on);
     return mk;
   },
 
@@ -3149,14 +3285,35 @@ const liveMap = {
     if (r.padFix) this._place("pad", r.padFix.lon_e7 / 1e7, r.padFix.lat_e7 / 1e7, `<b>Pad</b><br>${(r.padFix.lat_e7 / 1e7).toFixed(6)}, ${(r.padFix.lon_e7 / 1e7).toFixed(6)}`);
     else this._place("pad", null);
     let rocket = null;
+    const p = r.last;
     if (r.lastFix) {
       rocket = [r.lastFix.lon_e7 / 1e7, r.lastFix.lat_e7 / 1e7];
       const age = clock - r.lastFix.clock;
       const to = r.toRocket();
+      const inFlight = p && p.state >= STATE.BOOST && p.state < STATE.LANDED;
+      const label = p && p.state === STATE.LANDED ? "landed" : inFlight ? `rocket ${fmt.alt(p.altitude_agl_cm).join(" ")}` : "rocket";
       this._place("rocket", rocket[0], rocket[1],
         `<b>Rocket</b><br>${rocket[1].toFixed(6)}, ${rocket[0].toFixed(6)}<br>fix ${age.toFixed(0)} s ago` + (to ? `<br>${fmt.dist(to.dist).join(" ")} at ${Math.round(to.brg)}°` : ""));
+      this.markers.rocket.setLabel(label);
+      this.markers.rocket.setLive(inFlight || (age < 3 && p && p.state !== STATE.LANDED));
+      /* distance tag halfway along the bearing line */
+      if (to && to.dist > 30) {
+        this._place("dist", (r.gs.lon + rocket[0]) / 2, (r.gs.lat + rocket[1]) / 2, `${fmt.dist(to.dist).join(" ")} · ${Math.round(to.brg).toString().padStart(3, "0")}°`);
+      } else {
+        this._place("dist", null);
+      }
     } else {
       this._place("rocket", null);
+      this._place("dist", null);
+    }
+    /* apogee mark: the track point nearest the apogee time */
+    const apEv = r.events.find((e) => e.state === STATE.APOGEE);
+    const apTrack = apEv ? r.track.find((t) => t.state === STATE.APOGEE) || null : null;
+    if (apTrack && r.apogee) {
+      this._place("apogee", apTrack.lon_e7 / 1e7, apTrack.lat_e7 / 1e7, `<b>Apogee</b><br>${fmt.alt(r.apogee.alt_cm).join(" ")} at T+${r.apogee.t.toFixed(1)} s`);
+      this.markers.apogee.setLabel(`apogee ${fmt.alt(r.apogee.alt_cm).join(" ")}`);
+    } else {
+      this._place("apogee", null);
     }
 
     /* track split into one segment per phase so each gets its color */
@@ -3288,15 +3445,16 @@ function renderFlightList() {
   const el = $("flights-list");
   const recs = flights.records;
   if (!recs.length) {
-    el.innerHTML = `<div class="card"><div class="empty">No flights yet. A record opens by itself when the rocket is armed.</div></div><div class="note">${flights.storageLine()}</div>`;
+    setHTML(el, `<div class="card"><div class="empty">No flights yet. A record opens by itself when the rocket is armed.</div></div><div class="note">${flights.storageLine()}</div>`);
     return;
   }
   el.innerHTML = recs.map((r) => {
     const ap = r.stats && r.stats.apogee_cm !== null ? fmt.alt(r.stats.apogee_cm).join(" ") : "--";
+    const ft = r.stats && r.stats.flightTime_s !== null && r.stats.flightTime_s !== undefined ? ` · ${r.stats.flightTime_s.toFixed(0)} s` : "";
     const live = flights.open === r;
     return `<button class="flight-row st-${r.status}" data-id="${r.id}">
       <span class="fr-name">${escapeHtml(r.name)}</span>
-      <span class="fr-meta">${r.date} · ${escapeHtml(r.rocket)} · apogee ${ap}</span>
+      <span class="fr-meta">${r.date} · ${escapeHtml(r.rocket)} · apogee ${ap}${ft}</span>
       <span class="fr-status">${STATUS_LABEL[r.status] || r.status}${live ? " · live" : ""}</span>
     </button>`;
   }).join("") + `<div class="note">${flights.storageLine()}</div>`;
@@ -3319,9 +3477,9 @@ function renderFlightDetail(rec) {
   const s = rec.stats || {};
   const title = $("fd-title");
   if (document.activeElement !== title && title.value !== rec.name) title.value = rec.name;
-  $("fd-status").textContent = STATUS_LABEL[rec.status] || rec.status;
+  setText($("fd-status"), STATUS_LABEL[rec.status] || rec.status);
   $("fd-status").className = `state-pill st-${rec.status}`;
-  $("fd-sub").textContent = `${rec.rocket} · ${rec.date}` + (rec.createdAt ? ` · armed ${new Date(rec.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "");
+  setText($("fd-sub"), `${rec.rocket} · ${rec.date}` + (rec.createdAt ? ` · armed ${new Date(rec.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""));
 
   const kv = (label, [v, u], cls = "") => `<div class="kv"><span class="label">${label}</span><span class="v ${cls}">${v}<small>${u}</small></span></div>`;
   const tt = rec.t;
@@ -3340,7 +3498,8 @@ function renderFlightDetail(rec) {
   /* the graph ends a couple of seconds after touchdown */
   const landEv = r.events.find((e) => e.state === STATE.LANDED);
   const hist = landEv ? r.history.filter((h) => h.t <= landEv.t + 2) : r.history;
-  drawChart($("post-chart"), hist, { apogee: r.apogee, emptyText: "Altitude profile appears after liftoff" });
+  drawChart($("post-chart"), hist, { apogee: r.apogee, emptyText: "Altitude profile appears after liftoff", events: r.events.filter((e) => e.state >= STATE.BOOST), vz: !!prefs.showVz });
+  $("fd-vz").classList.toggle("on", !!prefs.showVz);
 
   const total = r.rx + r.lost;
   const kv2 = (label, v) => `<div class="kv"><span class="label">${label}</span><span class="v">${v}</span></div>`;
@@ -3355,12 +3514,12 @@ function renderFlightDetail(rec) {
   const coords = [];
   if (rec.padFix) coords.push(`<span>Pad</span><span>${rec.padFix.lat.toFixed(6)}, ${rec.padFix.lon.toFixed(6)}</span>`);
   if (rec.landing) coords.push(`<span>Landing</span><span>${rec.landing.lat.toFixed(6)}, ${rec.landing.lon.toFixed(6)}</span>`);
-  $("fd-coords").innerHTML = coords.join("") || `<span>GPS</span><span style="color:var(--muted)">no fixes recorded</span>`;
+  setHTML($("fd-coords"), coords.join("") || `<span>GPS</span><span style="color:var(--muted)">no fixes recorded</span>`);
 
   const saved = receiver;
   receiver = r; renderLog($("post-log")); receiver = saved;
 
-  $("fd-frames").textContent = `${rec.frames.length} frames stored (${(rec.frames.length * 46 / 1024).toFixed(0)} KB of telemetry)`;
+  setText($("fd-frames"), `${rec.frames.length} frames stored (${(rec.frames.length * 46 / 1024).toFixed(0)} KB of telemetry)`);
 }
 
 function downloadText(name, text, type) {
@@ -3581,9 +3740,11 @@ function wire() {
   });
   $("view").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
   $("phone-tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { showTab(b.dataset.tab); renderAll(true); }));
-  $("unit-btn").addEventListener("click", () => { imperial = !imperial; renderAll(true); });
+  $("unit-btn").addEventListener("click", () => { imperial = !imperial; prefs.imperial = imperial; savePrefs(); renderAll(true); });
+  $("fd-vz").addEventListener("click", () => { prefs.showVz = !prefs.showVz; savePrefs(); renderAll(true); });
   $("rc-mode").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     recoveryMode = b.dataset.mode;
+    prefs.recoveryMode = recoveryMode; savePrefs();
     $("rc-mode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
     $("rc-compass").hidden = recoveryMode !== "compass";
     $("rc-mapwrap").hidden = recoveryMode !== "map";
@@ -3607,6 +3768,10 @@ function wire() {
 }
 
 buildCompassTicks();
+if (recoveryMode === "map") {
+  $("rc-mode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.mode === "map"));
+  $("rc-compass").hidden = true; $("rc-mapwrap").hidden = false;
+}
 gsDisplay = new Display($("gs"));
 gsui = new GroundStationUI({
   /* these become radio commands or local actions on the real handheld */
