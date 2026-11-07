@@ -2718,14 +2718,15 @@ const liveMap = {
     const m = this.map;
     if (on) {
       if (!m.getSource("dem")) {
-        m.addSource("dem", { type: "raster-dem", tiles: DEM_TILES, tileSize: 256, encoding: "terrarium", maxzoom: 15 });
+        m.addSource("dem", { type: "raster-dem", tiles: DEM_TILES, tileSize: 256, encoding: "terrarium", maxzoom: 13 });
         m.addLayer({ id: "hillshade", type: "hillshade", source: "dem", paint: { "hillshade-exaggeration": 0.35 } }, "track-halo");
       }
-      m.setTerrain({ source: "dem", exaggeration: 1.3 });
+      m.setTerrain({ source: "dem", exaggeration: 1.0 });
       m.dragRotate.enable(); m.touchZoomRotate.enableRotation(); m.touchPitch.enable();
+      this.setFollow(false);   /* in 3D the user owns the camera */
       const to = receiver.toRocket();
-      this.view = { pitch: 60, bearing: to ? to.brg : 0 };
-      m.easeTo({ ...this.view, duration: 800 });
+      this.view = { pitch: 55, bearing: to ? to.brg : 0 };
+      m.easeTo({ ...this.view, zoom: Math.min(m.getZoom(), 16), duration: 800 });
       $("map-legend").textContent = "3D terrain: elevation from AWS Terrain Tiles (about 30 m). Two fingers tilt and rotate. Looking from you toward the rocket.";
     } else {
       m.setTerrain(null);
