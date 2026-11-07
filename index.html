@@ -9,6 +9,8 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.js"></script>
 <style>
 /* Mission Control simulator
  * Layout: a control strip on top (the simulator), then the two real screens
@@ -235,7 +237,26 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 .kv .v.good { color: var(--good); }
 .chart { width: 100%; height: 150px; display: block; border-radius: 8px; background: var(--bg); }
 .chart.tall { height: 200px; }
-.chart.map { height: 300px; }
+.chart.map { height: 360px; }
+.map-box { position: relative; width: 100%; height: 360px; border-radius: 8px; overflow: hidden; background: var(--bg); border: 1px solid var(--line); }
+.map-live { position: absolute; inset: 0; }
+.map-box .chart.map { position: absolute; inset: 0; height: 100%; }
+.map-tools { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; gap: 8px; pointer-events: none; }
+.map-tools > * { pointer-events: auto; }
+.map-layers { background: rgba(10,14,19,0.85); }
+.map-follow { padding: 5px 10px; font-size: 12px; background: rgba(10,14,19,0.85); }
+.map-note { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgba(10,14,19,0.9); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+.map-marker { width: 16px; height: 16px; cursor: pointer; }
+.map-marker i { position: absolute; inset: 0; display: block; background: var(--mk); border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,0.6); }
+.map-marker.dot i { border-radius: 50%; }
+.map-marker.square i { border-radius: 2px; }
+.map-marker.triangle i { clip-path: polygon(50% 0, 100% 100%, 0 100%); border: 0; box-shadow: none; }
+.map-marker span { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font: 700 11px var(--font-ui); color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; }
+.maplibregl-ctrl-attrib { font-size: 10px !important; background: rgba(10,14,19,0.7) !important; color: var(--muted) !important; }
+.maplibregl-ctrl-attrib a { color: var(--muted) !important; }
+.maplibregl-popup-content { background: var(--panel) !important; color: var(--fg) !important; font-family: var(--font-num); font-size: 12px; border: 1px solid var(--line); border-radius: 8px !important; padding: 8px 10px !important; }
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--panel) !important; }
+.maplibregl-popup-close-button { color: var(--muted) !important; }
 .tplus { font-family: var(--font-num); font-size: 15px; color: var(--muted); }
 .tplus b { color: var(--fg); font-weight: 500; }
 
@@ -461,8 +482,20 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
           <span class="note" id="cmp-note">North-up. Bearing is from the ground station to the rocket's last GPS fix.</span>
         </div>
         <div id="rc-mapwrap" hidden>
-          <canvas class="chart map" id="rc-map" width="358" height="300"></canvas>
-          <span class="note">Offline track map, north up. Pad, you (ground station), the rocket's GPS track and last fix.</span>
+          <div class="map-box">
+            <div id="rc-map" class="map-live"></div>
+            <canvas class="chart map" id="rc-map-fallback" width="358" height="360" hidden></canvas>
+            <div class="map-tools">
+              <div class="seg map-layers" id="map-layers">
+                <button data-layer="sat" class="on">Sat</button>
+                <button data-layer="topo">Topo</button>
+                <button data-layer="street">Street</button>
+              </div>
+              <button class="btn map-follow on" id="map-follow" title="Keep the rocket centered">Follow</button>
+            </div>
+            <div class="map-note" id="map-note" hidden></div>
+          </div>
+          <span class="note" id="map-legend">Satellite tiles by Esri. You are the green square, pad is the grey triangle, rocket is amber. Track colored by phase.</span>
         </div>
         <div class="card">
           <h3>Rocket position</h3>
@@ -2557,7 +2590,7 @@ function renderRecovery(p, clock) {
   $("cmp-note").textContent = to && to.dist < 15
     ? "You are at the rocket."
     : "North-up. Bearing is from the ground station to the rocket's last GPS fix.";
-  if (recoveryMode === "map") drawMap($("rc-map"));
+  if (recoveryMode === "map") liveMap.update(clock);
   const links = $("map-links");
   if (f) {
     const lat = (f.lat_e7 / 1e7).toFixed(6), lon = (f.lon_e7 / 1e7).toFixed(6);
@@ -2568,6 +2601,190 @@ function renderRecovery(p, clock) {
     links.hidden = true;
   }
 }
+
+/* ====================================================================== */
+/* Live map (MapLibre GL). Satellite, topo and street tiles with the pad,  */
+/* the ground station, the track and the rocket on top. On the hardware   */
+/* the library and an offline tile pack are served by the ESP32 itself.   */
+/* If tiles cannot load (the artifact preview blocks them) the drawn map  */
+/* below takes over.                                                       */
+/* ====================================================================== */
+
+const TILE_LAYERS = {
+  sat: {
+    tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+    maxzoom: 19,
+    attribution: "Imagery: Esri, Maxar, Earthstar Geographics",
+    legend: "Satellite imagery by Esri. You are the green square, pad is the grey triangle, rocket is amber. Track colored by phase.",
+  },
+  topo: {
+    tiles: ["https://a.tile.opentopomap.org/{z}/{x}/{y}.png", "https://b.tile.opentopomap.org/{z}/{x}/{y}.png", "https://c.tile.opentopomap.org/{z}/{x}/{y}.png"],
+    maxzoom: 17,
+    attribution: "Map data: OpenStreetMap contributors, SRTM | Style: OpenTopoMap (CC-BY-SA)",
+    legend: "Topographic map by OpenTopoMap: contour lines, trails and roads. Track colored by phase.",
+  },
+  street: {
+    tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+    maxzoom: 19,
+    attribution: "Map data: OpenStreetMap contributors",
+    legend: "Street map by OpenStreetMap. Track colored by phase.",
+  },
+};
+
+const PHASE_COLORS = {
+  3: "#ff7a45", 4: "#ffa36b", 5: "#c9a6ff", 6: "#5cc8ff", 7: "#5cc8ff", 8: "#3ddc84",
+};
+
+const liveMap = {
+  map: null, ready: false, failed: false, follow: true, layer: "sat",
+  lastUpdate: -1, tileErrors: 0, tileOk: 0, popup: null,
+
+  init() {
+    if (this.map || this.failed) return;
+    if (typeof maplibregl === "undefined") { this._fail("Map library did not load. Open the GitHub Pages link for the live map."); return; }
+    const center = [receiver.gs.lon || DEFAULT_SITE.padLon, receiver.gs.lat || DEFAULT_SITE.padLat];
+    try {
+      this.map = new maplibregl.Map({
+        container: "rc-map",
+        style: { version: 8, sources: {}, layers: [] },
+        center, zoom: 15, attributionControl: { compact: true },
+        dragRotate: false, pitchWithRotate: false, touchPitch: false,
+      });
+    } catch (e) { this._fail("Map could not start on this device."); return; }
+    this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    this.map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "imperial" }), "bottom-left");
+    this.map.on("load", () => {
+      this._addBase(this.layer);
+      const empty = { type: "FeatureCollection", features: [] };
+      this.map.addSource("track", { type: "geojson", data: empty });
+      this.map.addSource("bearing", { type: "geojson", data: empty });
+      this.map.addLayer({ id: "track-halo", type: "line", source: "track", paint: { "line-color": "#000", "line-width": 5, "line-opacity": 0.6 }, layout: { "line-cap": "round", "line-join": "round" } });
+      this.map.addLayer({ id: "track", type: "line", source: "track", paint: { "line-color": ["get", "color"], "line-width": 3 }, layout: { "line-cap": "round", "line-join": "round" } });
+      this.map.addLayer({ id: "bearing", type: "line", source: "bearing", paint: { "line-color": "#ffb020", "line-width": 2, "line-dasharray": [2, 2] } });
+      /* markers are plain HTML elements: no font files needed, so they
+       * work offline on the ESP32 exactly like here */
+      this.markers = {
+        you: this._marker("you", "#3ddc84", "square"),
+        pad: this._marker("pad", "#8b9bb0", "triangle"),
+        rocket: this._marker("rocket", "#ffb020", "dot"),
+      };
+      this.ready = true;
+      this.lastUpdate = -1;
+      this.map.on("dragstart", () => this.setFollow(false));
+    });
+    this.map.on("error", (e) => {
+      if (e && e.sourceId === "base") {
+        this.tileErrors++;
+        if (this.tileErrors >= 4 && this.tileOk === 0) this._fail("Map tiles are blocked in this preview. Open the GitHub Pages link for the live map; showing the offline track map instead.");
+      }
+    });
+    this.map.on("data", (e) => { if (e.sourceId === "base" && e.tile && e.isSourceLoaded !== false) this.tileOk++; });
+    $("map-layers").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => this.setLayer(b.dataset.layer)));
+    $("map-follow").addEventListener("click", () => this.setFollow(!this.follow));
+  },
+
+  _addBase(name) {
+    const L = TILE_LAYERS[name];
+    if (this.map.getLayer("base")) this.map.removeLayer("base");
+    if (this.map.getSource("base")) this.map.removeSource("base");
+    this.map.addSource("base", { type: "raster", tiles: L.tiles, tileSize: 256, maxzoom: L.maxzoom, attribution: L.attribution });
+    const before = this.map.getLayer("track-halo") ? "track-halo" : undefined;
+    this.map.addLayer({ id: "base", type: "raster", source: "base" }, before);
+    $("map-legend").textContent = L.legend;
+  },
+
+  setLayer(name) {
+    this.layer = name;
+    $("map-layers").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.layer === name));
+    if (this.ready) this._addBase(name);
+  },
+
+  setFollow(on) {
+    this.follow = on;
+    $("map-follow").classList.toggle("on", on);
+    if (on) this.lastUpdate = -1;
+  },
+
+  _fail(text) {
+    this.failed = true;
+    if (this.map) { try { this.map.remove(); } catch (e) { /* ignore */ } this.map = null; }
+    $("rc-map").hidden = true;
+    $("map-tools").hidden = true;
+    $("rc-map-fallback").hidden = false;
+    const n = $("map-note"); n.textContent = text; n.hidden = false;
+    $("map-legend").textContent = "Offline track map, north up. Pad, you (ground station), the rocket's GPS track and last fix.";
+  },
+
+  _marker(label, color, shape) {
+    const el = document.createElement("div");
+    el.className = `map-marker ${shape}`;
+    el.style.setProperty("--mk", color);
+    el.innerHTML = `<i></i><span>${label}</span>`;
+    const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "220px", offset: 14 });
+    const mk = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([0, 0]).setPopup(popup);
+    mk.info = (html) => popup.setHTML(html);
+    return mk;
+  },
+
+  _place(name, lon, lat, info) {
+    const mk = this.markers[name];
+    if (lon === null) { mk.remove(); mk.placed = false; return; }
+    mk.setLngLat([lon, lat]);
+    mk.info(info);
+    if (!mk.placed) { mk.addTo(this.map); mk.placed = true; }
+  },
+
+  update(clock) {
+    if (this.failed) { drawMap($("rc-map-fallback")); return; }
+    if (!this.map) { this.init(); if (this.failed) { drawMap($("rc-map-fallback")); } return; }
+    if (!this.ready) return;
+    if (clock - this.lastUpdate < 0.5 && this.lastUpdate >= 0) return;
+    this.lastUpdate = clock;
+
+    const r = receiver;
+    this._place("you", r.gs.lon, r.gs.lat, `<b>Ground station</b><br>${r.gs.lat.toFixed(6)}, ${r.gs.lon.toFixed(6)}`);
+    if (r.padFix) this._place("pad", r.padFix.lon_e7 / 1e7, r.padFix.lat_e7 / 1e7, `<b>Pad</b><br>${(r.padFix.lat_e7 / 1e7).toFixed(6)}, ${(r.padFix.lon_e7 / 1e7).toFixed(6)}`);
+    else this._place("pad", null);
+    let rocket = null;
+    if (r.lastFix) {
+      rocket = [r.lastFix.lon_e7 / 1e7, r.lastFix.lat_e7 / 1e7];
+      const age = clock - r.lastFix.clock;
+      const to = r.toRocket();
+      this._place("rocket", rocket[0], rocket[1],
+        `<b>Rocket</b><br>${rocket[1].toFixed(6)}, ${rocket[0].toFixed(6)}<br>fix ${age.toFixed(0)} s ago` + (to ? `<br>${fmt.dist(to.dist).join(" ")} at ${Math.round(to.brg)}°` : ""));
+    } else {
+      this._place("rocket", null);
+    }
+
+    /* track split into one segment per phase so each gets its color */
+    const segs = [];
+    let cur = null;
+    for (const t of r.track) {
+      const c = PHASE_COLORS[t.state] || "#8b9bb0";
+      const coord = [t.lon_e7 / 1e7, t.lat_e7 / 1e7];
+      if (!cur || cur.properties.color !== c) {
+        const prev = cur ? cur.geometry.coordinates[cur.geometry.coordinates.length - 1] : null;
+        cur = { type: "Feature", geometry: { type: "LineString", coordinates: prev ? [prev, coord] : [coord] }, properties: { color: c } };
+        segs.push(cur);
+      } else {
+        cur.geometry.coordinates.push(coord);
+      }
+    }
+    this.map.getSource("track").setData({ type: "FeatureCollection", features: segs.filter((s) => s.geometry.coordinates.length > 1) });
+
+    this.map.getSource("bearing").setData(rocket
+      ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [[r.gs.lon, r.gs.lat], rocket] }, properties: {} }] }
+      : { type: "FeatureCollection", features: [] });
+
+    if (this.follow) {
+      if (rocket) {
+        const b = new maplibregl.LngLatBounds([r.gs.lon, r.gs.lat], [r.gs.lon, r.gs.lat]).extend(rocket);
+        if (r.padFix) b.extend([r.padFix.lon_e7 / 1e7, r.padFix.lat_e7 / 1e7]);
+        this.map.fitBounds(b, { padding: 50, maxZoom: 17, duration: 300 });
+      }
+    }
+  },
+};
 
 /* Offline track map: pad, ground station, GPS track, rocket. North up,
  * scaled to fit, with a scale bar. No tiles: works with no internet. */
@@ -2879,6 +3096,7 @@ function wire() {
     $("rc-mode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
     $("rc-compass").hidden = recoveryMode !== "compass";
     $("rc-mapwrap").hidden = recoveryMode !== "map";
+    if (recoveryMode === "map" && liveMap.map) setTimeout(() => liveMap.map.resize(), 50);
     renderAll(true);
   }));
   $("copy-coords").addEventListener("click", async () => {
