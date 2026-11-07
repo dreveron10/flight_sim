@@ -491,7 +491,10 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
                 <button data-layer="topo">Topo</button>
                 <button data-layer="street">Street</button>
               </div>
-              <button class="btn map-follow on" id="map-follow" title="Keep the rocket centered">Follow</button>
+              <div class="row" style="gap:6px">
+                <button class="btn map-follow" id="map-3d" title="3D terrain">3D</button>
+                <button class="btn map-follow on" id="map-follow" title="Keep the rocket centered">Follow</button>
+              </div>
             </div>
             <div class="map-note" id="map-note" hidden></div>
           </div>
@@ -2635,8 +2638,12 @@ const PHASE_COLORS = {
   3: "#ff7a45", 4: "#ffa36b", 5: "#c9a6ff", 6: "#5cc8ff", 7: "#5cc8ff", 8: "#3ddc84",
 };
 
+/* Elevation tiles (Terrarium encoding) from the public AWS Terrain Tiles
+ * set, about 30 m resolution over Puerto Rico. Free, no key. */
+const DEM_TILES = ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"];
+
 const liveMap = {
-  map: null, ready: false, failed: false, follow: true, layer: "sat",
+  map: null, ready: false, failed: false, follow: true, layer: "sat", threeD: false,
   lastUpdate: -1, tileErrors: 0, tileOk: 0, popup: null,
 
   init() {
@@ -2648,7 +2655,7 @@ const liveMap = {
         container: "rc-map",
         style: { version: 8, sources: {}, layers: [] },
         center, zoom: 15, attributionControl: { compact: true },
-        dragRotate: false, pitchWithRotate: false, touchPitch: false,
+        dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 70,
       });
     } catch (e) { this._fail("Map could not start on this device."); return; }
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
@@ -2671,6 +2678,10 @@ const liveMap = {
       this.ready = true;
       this.lastUpdate = -1;
       this.map.on("dragstart", () => this.setFollow(false));
+      /* remember the user's own tilt and rotation so follow keeps them */
+      this.map.on("rotateend", () => { if (this.threeD) this.view = { pitch: this.map.getPitch(), bearing: this.map.getBearing() }; });
+      this.map.on("pitchend", () => { if (this.threeD) this.view = { pitch: this.map.getPitch(), bearing: this.map.getBearing() }; });
+      this.view = { pitch: 0, bearing: 0 };
     });
     this.map.on("error", (e) => {
       if (e && e.sourceId === "base") {
@@ -2681,6 +2692,7 @@ const liveMap = {
     this.map.on("data", (e) => { if (e.sourceId === "base" && e.tile && e.isSourceLoaded !== false) this.tileOk++; });
     $("map-layers").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => this.setLayer(b.dataset.layer)));
     $("map-follow").addEventListener("click", () => this.setFollow(!this.follow));
+    $("map-3d").addEventListener("click", () => this.set3D(!this.threeD));
   },
 
   _addBase(name) {
@@ -2688,7 +2700,7 @@ const liveMap = {
     if (this.map.getLayer("base")) this.map.removeLayer("base");
     if (this.map.getSource("base")) this.map.removeSource("base");
     this.map.addSource("base", { type: "raster", tiles: L.tiles, tileSize: 256, maxzoom: L.maxzoom, attribution: L.attribution });
-    const before = this.map.getLayer("track-halo") ? "track-halo" : undefined;
+    const before = this.map.getLayer("hillshade") ? "hillshade" : (this.map.getLayer("track-halo") ? "track-halo" : undefined);
     this.map.addLayer({ id: "base", type: "raster", source: "base" }, before);
     $("map-legend").textContent = L.legend;
   },
@@ -2697,6 +2709,32 @@ const liveMap = {
     this.layer = name;
     $("map-layers").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.layer === name));
     if (this.ready) this._addBase(name);
+  },
+
+  set3D(on) {
+    if (!this.ready) return;
+    this.threeD = on;
+    $("map-3d").classList.toggle("on", on);
+    const m = this.map;
+    if (on) {
+      if (!m.getSource("dem")) {
+        m.addSource("dem", { type: "raster-dem", tiles: DEM_TILES, tileSize: 256, encoding: "terrarium", maxzoom: 15 });
+        m.addLayer({ id: "hillshade", type: "hillshade", source: "dem", paint: { "hillshade-exaggeration": 0.35 } }, "track-halo");
+      }
+      m.setTerrain({ source: "dem", exaggeration: 1.3 });
+      m.dragRotate.enable(); m.touchZoomRotate.enableRotation(); m.touchPitch.enable();
+      const to = receiver.toRocket();
+      this.view = { pitch: 60, bearing: to ? to.brg : 0 };
+      m.easeTo({ ...this.view, duration: 800 });
+      $("map-legend").textContent = "3D terrain: elevation from AWS Terrain Tiles (about 30 m). Two fingers tilt and rotate. Looking from you toward the rocket.";
+    } else {
+      m.setTerrain(null);
+      if (m.getLayer("hillshade")) m.removeLayer("hillshade");
+      m.dragRotate.disable(); m.touchZoomRotate.disableRotation(); m.touchPitch.disable();
+      this.view = { pitch: 0, bearing: 0 };
+      m.easeTo({ ...this.view, duration: 600 });
+      $("map-legend").textContent = TILE_LAYERS[this.layer].legend;
+    }
   },
 
   setFollow(on) {
@@ -2780,7 +2818,7 @@ const liveMap = {
       if (rocket) {
         const b = new maplibregl.LngLatBounds([r.gs.lon, r.gs.lat], [r.gs.lon, r.gs.lat]).extend(rocket);
         if (r.padFix) b.extend([r.padFix.lon_e7 / 1e7, r.padFix.lat_e7 / 1e7]);
-        this.map.fitBounds(b, { padding: 50, maxZoom: 17, duration: 300 });
+        if (!this.map.isEasing()) this.map.fitBounds(b, { padding: 50, maxZoom: 17, duration: 300, ...this.view });
       }
     }
   },
