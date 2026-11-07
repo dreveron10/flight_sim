@@ -2725,8 +2725,8 @@ const liveMap = {
       m.dragRotate.enable(); m.touchZoomRotate.enableRotation(); m.touchPitch.enable();
       this.setFollow(false);   /* in 3D the user owns the camera */
       const to = receiver.toRocket();
-      this.view = { pitch: 55, bearing: to ? to.brg : 0 };
-      m.easeTo({ ...this.view, zoom: Math.min(m.getZoom(), 16), duration: 800 });
+      this.view = { pitch: 50, bearing: to ? to.brg : 0 };
+      this._frame(800);
       $("map-legend").textContent = "3D terrain: elevation from AWS Terrain Tiles (about 30 m). Two fingers tilt and rotate. Looking from you toward the rocket.";
     } else {
       m.setTerrain(null);
@@ -2736,6 +2736,33 @@ const liveMap = {
       m.easeTo({ ...this.view, duration: 600 });
       $("map-legend").textContent = TILE_LAYERS[this.layer].legend;
     }
+  },
+
+  /* Fit you, the pad and the rocket on screen with the current tilt and rotation. */
+  _frame(duration) {
+    const r = receiver;
+    const you = [r.gs.lon, r.gs.lat];
+    const rocket = r.lastFix ? [r.lastFix.lon_e7 / 1e7, r.lastFix.lat_e7 / 1e7] : null;
+    if (!this.threeD) {
+      const b = new maplibregl.LngLatBounds(you, you);
+      if (rocket) b.extend(rocket);
+      if (r.padFix) b.extend([r.padFix.lon_e7 / 1e7, r.padFix.lat_e7 / 1e7]);
+      this.map.fitBounds(b, { padding: { top: 70, bottom: 50, left: 40, right: 40 }, maxZoom: 17, duration, pitch: 0, bearing: 0 });
+      return;
+    }
+    /* Tilted view: fitBounds ignores the tilt, so place the camera by hand.
+     * Stand a little behind "you", look along the bearing to the rocket,
+     * and pick the zoom so the distance fills about a third of the screen. */
+    const to = r.toRocket();
+    const dist = to ? Math.max(to.dist, 60) : 300;
+    const bearing = to ? to.brg : this.view.bearing;
+    const h = this.map.getContainer().clientHeight || 360;
+    const mPerPx = dist / (h * 0.42);
+    const zoom = Math.min(17, Math.log2((156543.03 * Math.cos(you[1] * Math.PI / 180)) / mPerPx));
+    const f = 0.45; /* center 45 percent of the way from you to the rocket */
+    const center = rocket ? [you[0] + (rocket[0] - you[0]) * f, you[1] + (rocket[1] - you[1]) * f] : you;
+    this.view = { pitch: this.view.pitch, bearing };
+    this.map.easeTo({ center, zoom, pitch: this.view.pitch, bearing, duration });
   },
 
   setFollow(on) {
@@ -2816,11 +2843,7 @@ const liveMap = {
       : { type: "FeatureCollection", features: [] });
 
     if (this.follow) {
-      if (rocket) {
-        const b = new maplibregl.LngLatBounds([r.gs.lon, r.gs.lat], [r.gs.lon, r.gs.lat]).extend(rocket);
-        if (r.padFix) b.extend([r.padFix.lon_e7 / 1e7, r.padFix.lat_e7 / 1e7]);
-        if (!this.map.isEasing()) this.map.fitBounds(b, { padding: 50, maxZoom: 17, duration: 300, ...this.view });
-      }
+      if (rocket && !this.map.isEasing()) this._frame(300);
     }
   },
 };
