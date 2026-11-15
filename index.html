@@ -539,6 +539,37 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 /* one quiet line under the fault switches: what the firmware build is and what it has noticed */
 .fw-note { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted, #6b7280); }
 
+/* ---- simulation setup (setup.js) ------------------------------------------ */
+.su-panel[open] { padding-bottom: 4px; }
+.su-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0; font-size: 13px; }
+.su-groups { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .su-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1180px) { .su-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.su-group { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px 10px; margin: 0; min-width: 0; }
+.su-group legend { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 0 4px; }
+.su-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 6px 8px; align-items: center; font-size: 12px; }
+.su-in { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.su-in input, .su-in select { width: 100%; min-width: 0; padding: 5px 6px; font-size: 12px; font-family: var(--font-num); }
+.su-in input[type="text"] { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color: var(--fg); font-family: inherit; }
+.su-unit { color: var(--muted); font-size: 11px; min-width: 3.2em; }
+.su-note { color: var(--muted); font-size: 12px; line-height: 1.4; margin: 6px 0 0; }
+.su-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.su-actions { margin: 12px 0 4px; }
+.su-file { position: relative; overflow: hidden; cursor: pointer; }
+.su-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.su-curve { display: block; width: 100%; margin-top: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.su-results { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 8px 0; }
+@media (min-width: 760px) { .su-results { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.su-res { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.su-k { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+.su-v { font-size: 17px; font-weight: 600; }
+.su-n { color: var(--muted); font-size: 11px; min-height: 1em; }
+.su-plots { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .su-plots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.su-plots figure { margin: 0; min-width: 0; }
+.su-plots canvas { display: block; width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.su-plots figcaption { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
 </style>
 
 <header class="topbar">
@@ -546,6 +577,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
   <div class="sim-status">
     <span class="pill" id="sim-pill"><span class="dot"></span><span id="sim-pill-text">Ready</span></span>
     <span class="pill num" id="sim-clock">T 0.0 s</span>
+    <span class="pill num" id="sim-wind" title="The simulated wind at the rocket's height (10 m on the pad)">Wind</span>
   </div>
 </header>
 
@@ -556,6 +588,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
       <select id="profile" aria-label="Flight profile">
         <option value="zafiro">ZAFIRO I, AeroTech I218R, about 3,100 ft</option>
         <option value="rubi">RUBI, AeroTech J500G, about 4,100 ft</option>
+        <option value="custom">From the setup below</option>
       </select>
     </div>
     <div class="row">
@@ -575,7 +608,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
   </div>
 
   <details class="ctl-more">
-    <summary>Faults and site</summary>
+    <summary>Faults</summary>
     <div class="ctl-more-grid">
   <div class="ctl-group">
     <span class="label">Fault injection</span>
@@ -596,20 +629,12 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
     <p class="fw-note" id="fw-note"></p>
   </div>
 
-  <div class="ctl-group site">
-    <span class="label">Site (example coordinates, edit freely)</span>
-    <div class="site-grid">
-      <label for="pad-lat">Pad lat</label><input type="number" id="pad-lat" step="0.0001" value="18.2000">
-      <label for="pad-lon">Pad lon</label><input type="number" id="pad-lon" step="0.0001" value="-66.9000">
-      <label for="wind-spd">Wind m/s</label><input type="number" id="wind-spd" step="0.5" min="0" value="3.5">
-      <label for="wind-dir">From deg</label><input type="number" id="wind-dir" step="5" min="0" max="359" value="80">
-      <label for="gs-e">GS east m</label><input type="number" id="gs-e" step="10" value="180">
-      <label for="gs-n">GS north m</label><input type="number" id="gs-n" step="10" value="-90">
     </div>
-    <span class="note">Site changes apply on Reset. The ground station position is the receiver's own GPS in the real system.</span>
-  </div>
+  </details>
 
-    </div>
+  <details class="ctl-more su-panel" id="setup-panel">
+    <summary>Simulation setup: rocket, motor, parachutes, launch, wind</summary>
+    <div id="setup"></div>
   </details>
 
   <div class="raw" aria-live="off">
@@ -46298,6 +46323,398 @@ for (const k of ["_frame", "_frameOk", "_commandFrame", "_ack", "_logQuery", "lo
 }
 
 
+/* ---- world.js ---- */
+/*
+ * world.js : the physics of the simulated world, apart from the firmware and the screens.
+ *
+ *   atmosphere   pressure, density and speed of sound above the pad, for the day's temperature
+ *   Wind         wind that grows with height, with gusts that come and go (and swing in direction)
+ *   thrust       a motor's thrust curve: a real one from a RASP .eng file (thrustcurve.org), or a generic shape
+ *                scaled to the total impulse and burn time
+ *   RocketBody   the rocket as a rigid body: position, velocity and attitude in 3D. On the rail it slides along the
+ *                rail; off it, thrust pushes along the nose, drag acts against the air it moves through, and the
+ *                fins turn it into that air (weathercocking) as fast as its stability and the dynamic pressure
+ *                allow. Under parachute it hangs and swings; on the ground it lies on its side.
+ *   predictFlight  the same physics with ideal deployments, no firmware: the setup panel's "Run prediction"
+ *   PRESETS      ZAFIRO I and RUBI from their OpenRocket files (claude/ZAFIRO_I_summary.md, claude/RUBI_brief.md)
+ *
+ * World axes: east, north, up (m), origin at the pad. The body axes are kept as three world vectors (bx, by, bz),
+ * bz along the rocket toward the nose. Every sensor reading is a world vector put into those axes, and the gyro reads
+ * the true rate the frame turns at, so the firmware's own attitude sum (flight.c section 3) sees a consistent world.
+ */
+
+const G = 9.80665;
+const FT = 0.3048, IN = 0.0254, MPH = 0.44704, LB = 0.45359237;
+const R_AIR = 287.05, LAPSE = 0.0065, GAMMA = 1.4;
+const CN_ALPHA = 10;          /* normal force slope of a typical 3 or 4 fin rocket, per radian (an assumption) */
+
+/* ---------------------------------------------------------------- small vector helpers, [east, north, up] */
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = (a) => Math.hypot(a[0], a[1], a[2]);
+const unit = (a) => { const n = norm(a); return n > 1e-12 ? mul(a, 1 / n) : [0, 0, 1]; };
+function rotate(v, k, ang) {                                   /* v turned by ang about the unit axis k */
+  const c = Math.cos(ang), s = Math.sin(ang), kd = dot(k, v), kx = cross(k, v);
+  return [v[0] * c + kx[0] * s + k[0] * kd * (1 - c), v[1] * c + kx[1] * s + k[1] * kd * (1 - c), v[2] * c + kx[2] * s + k[2] * kd * (1 - c)];
+}
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+
+/* A small seeded random generator, so a prediction gives the same answer every time it is run. */
+function seededRandom(seed = 1) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function gaussFrom(rnd) {
+  let u = 0, v = 0;
+  while (u === 0) u = rnd();
+  while (v === 0) v = rnd();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* ---------------------------------------------------------------- the air */
+/* ISA pressure at the pad's height above sea level (the day's weather is not modelled), the temperature the user
+ * sets at the pad, falling 6.5 degC per km. */
+function isaTempC(altMsl_m) { return 15 - LAPSE * altMsl_m; }
+function atmosphere(site) {
+  const P0 = 101325 * Math.pow(1 - (site.padAltMsl_m || 0) / 44330.77, 5.25588);
+  const T0 = (site.temp_C ?? isaTempC(site.padAltMsl_m || 0)) + 273.15;
+  const n = G / (R_AIR * LAPSE);
+  return {
+    T0, P0,
+    temp: (h) => T0 - LAPSE * h,
+    pressure: (h) => P0 * Math.pow(Math.max(0.05, 1 - LAPSE * h / T0), n),
+    density(h) { return this.pressure(h) / (R_AIR * this.temp(h)); },
+    sound: (h) => Math.sqrt(GAMMA * R_AIR * (T0 - LAPSE * h)),
+  };
+}
+
+/* ---------------------------------------------------------------- wind */
+/* speed_mps is the wind 10 m above the ground (what a hand anemometer or a forecast gives). Higher up it grows as
+ * (height / 10 m) ^ shear: 0.14 is open, flat ground (about 1.8 times as strong at 1,000 m). gustPct is how much it
+ * varies (turbulence intensity): 0 steady, 10 to 20 a normal day, 30 or more gusty. Gusts last a few seconds and
+ * swing the direction a little. */
+class Wind {
+  constructor(cfg = {}, rnd = Math.random) {
+    this.speed = Math.max(0, cfg.speed_mps || 0);
+    this.fromDeg = ((cfg.fromDeg || 0) % 360 + 360) % 360;
+    this.gust = clamp((cfg.gustPct || 0) / 100, 0, 0.6);
+    this.shear = clamp(cfg.shear ?? 0.14, 0, 0.4);
+    this.rnd = rnd;
+    this.g = [0, 0, 0];                         /* along, across, direction swing: each a slow random wave of size 1 */
+    this.tau = [3.0, 2.0, 6.0];
+  }
+  step(h) {
+    for (let i = 0; i < 3; i++) this.g[i] += -this.g[i] / this.tau[i] * h + Math.sqrt(2 * h / this.tau[i]) * gaussFrom(this.rnd);
+  }
+  meanAt(hAgl) { return this.speed * Math.pow(Math.max(hAgl, 1) / 10, this.shear); }
+  /* the wind's direction of travel and speed right now at this height: [east, north, 0] in m/s */
+  at(hAgl) {
+    const m = this.meanAt(hAgl);
+    if (m <= 0) return [0, 0, 0];
+    const toDeg = this.fromDeg + 180 + this.gust * 25 * this.g[2];
+    const along = m * (1 + this.gust * this.g[0]), across = m * this.gust * 0.6 * this.g[1];
+    const t = toDeg * D2R;
+    const ae = Math.sin(t), an = Math.cos(t);               /* unit vector the wind blows toward */
+    return [ae * along + an * across, an * along - ae * across, 0];
+  }
+  /* for the readouts: speed and the direction it comes from, at this height */
+  describe(hAgl) {
+    const w = this.at(hAgl), s = Math.hypot(w[0], w[1]);
+    return { speed: s, fromDeg: s > 0 ? ((Math.atan2(-w[0], -w[1]) * R2D) + 360) % 360 : this.fromDeg };
+  }
+}
+
+/* ---------------------------------------------------------------- motors */
+/* The old simulator shape: quick ramp, early peak, taper to burnout. Used when no real curve is loaded. */
+function genericShape(t, burn) {
+  if (t < 0 || t >= burn) return 0;
+  const ramp = 0.08 * burn;
+  if (t < ramp) return 1.35 * (t / ramp);
+  return 1.35 - 0.75 * (t - ramp) / (burn - ramp);
+}
+function impulseOf(curve) {
+  let s = 0;
+  for (let i = 1; i < curve.length; i++) s += (curve[i][0] - curve[i - 1][0]) * (curve[i][1] + curve[i - 1][1]) / 2;
+  return s;
+}
+/* motor: { name, totalImpulse_Ns, burnTime_s, propellantMass_kg, curve? [[t, N], ...] } */
+function makeThrust(motor) {
+  let curve = motor.curve && motor.curve.length >= 2 ? motor.curve.slice() : null;
+  if (!curve) {
+    const burn = Math.max(0.05, motor.burnTime_s || 1), n = 60, pts = [];
+    for (let i = 0; i <= n; i++) { const t = burn * i / n; pts.push([t, genericShape(Math.min(t, burn * 0.9999), burn)]); }
+    pts.push([burn, 0]);
+    const k = (motor.totalImpulse_Ns || 1) / impulseOf(pts);
+    curve = pts.map(([t, f]) => [t, f * k]);
+  }
+  if (curve[0][0] > 0) curve.unshift([0, 0]);
+  const burn = curve[curve.length - 1][0], impulse = impulseOf(curve);
+  /* cumulative impulse, so the propellant burns in step with the thrust (as real motors do) */
+  const cum = [0];
+  for (let i = 1; i < curve.length; i++) cum.push(cum[i - 1] + (curve[i][0] - curve[i - 1][0]) * (curve[i][1] + curve[i - 1][1]) / 2);
+  let i = 0;
+  const find = (t) => { if (t < curve[i][0]) i = 0; while (i < curve.length - 2 && t > curve[i + 1][0]) i++; return i; };
+  return {
+    curve, burn, impulse,
+    force(t) {
+      if (t < 0 || t >= burn) return 0;
+      const j = find(t), [t0, f0] = curve[j], [t1, f1] = curve[j + 1];
+      return t1 > t0 ? f0 + (f1 - f0) * (t - t0) / (t1 - t0) : f1;
+    },
+    burnedFraction(t) {
+      if (t <= 0) return 0;
+      if (t >= burn) return 1;
+      const f = this.force(t), j = find(t), [t0, f0] = curve[j];
+      return (cum[j] + (t - t0) * (f0 + f) / 2) / impulse;
+    },
+  };
+}
+/* A RASP .eng file (the format thrustcurve.org and OpenRocket use). Returns null if it does not read as one. */
+function parseEng(text) {
+  const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith(";"));
+  if (!lines.length) return null;
+  const h = lines[0].split(/\s+/);
+  if (h.length < 7) return null;
+  const curve = [];
+  for (const l of lines.slice(1)) {
+    const v = l.split(/\s+/).map(Number);
+    if (v.length < 2 || !isFinite(v[0]) || !isFinite(v[1])) break;
+    curve.push([v[0], v[1]]);
+  }
+  const propMass = parseFloat(h[4]), totalMass = parseFloat(h[5]);
+  if (curve.length < 2 || !(propMass > 0) || !(totalMass > 0)) return null;
+  const th = makeThrust({ curve });
+  return {
+    name: `${h[6]} ${h[0]}`, designation: h[0], maker: h[6], diameter_mm: parseFloat(h[1]), length_mm: parseFloat(h[2]),
+    delays: h[3], propellantMass_kg: propMass, totalMass_kg: totalMass, curve: th.curve, totalImpulse_Ns: th.impulse, burnTime_s: th.burn,
+  };
+}
+/* Motor class from total impulse: A is up to 2.5 Ns, each letter doubles. */
+function motorClass(impulse) {
+  if (impulse <= 0) return "-";
+  const n = Math.max(0, Math.ceil(Math.log2(impulse / 2.5)));
+  return String.fromCharCode(65 + Math.min(n, 25));
+}
+
+/* ---------------------------------------------------------------- parachutes */
+const chuteCdA = (c) => (c && c.diameter_m > 0 ? (c.cd || 0) * Math.PI * (c.diameter_m / 2) ** 2 : 0);
+function terminalSpeed(mass_kg, cdA, rho = 1.2) { return cdA > 0 ? Math.sqrt(2 * mass_kg * G / (rho * cdA)) : Infinity; }
+
+/* ---------------------------------------------------------------- the rocket */
+/* rocket: { liftoffMass_kg, diameter_m, length_m, cd, stability_cal, drogue {diameter_m, cd} | null, main {...} }
+ * motor:  see makeThrust
+ * launch: { railLength_m, angle_deg (from vertical), direction_deg (the way the rail leans, from north) }
+ * site:   atmosphere() fields and wind cfg */
+class RocketBody {
+  constructor(cfg, rnd = Math.random) {
+    this.cfg = cfg; this.rnd = rnd;
+    this.thrust = makeThrust(cfg.motor);
+    this.atm = atmosphere(cfg.site);
+    this.wind = new Wind(cfg.site.wind || {}, rnd);
+    this.area = Math.PI * (cfg.rocket.diameter_m / 2) ** 2;
+    this.drogueCdA = chuteCdA(cfg.rocket.drogue);
+    this.mainCdA = chuteCdA(cfg.rocket.main);
+    this.reset();
+  }
+  reset() {
+    const c = this.cfg, L = c.launch || {};
+    this.pos = [0, 0, 0]; this.vel = [0, 0, 0]; this.acc = [0, 0, 0];
+    this.mass = c.rocket.liftoffMass_kg;
+    this.prop = c.motor.propellantMass_kg || 0;
+    /* on the rail: nose leaning angle_deg toward direction_deg, turned to a random roll angle */
+    const ang = clamp(L.angle_deg || 0, 0, 30) * D2R, az = (L.direction_deg || 0) * D2R;
+    const bz = [Math.sin(ang) * Math.sin(az), Math.sin(ang) * Math.cos(az), Math.cos(ang)];
+    let bx = unit(cross([Math.cos(az), -Math.sin(az), 0], bz));
+    if (norm(cross([Math.cos(az), -Math.sin(az), 0], bz)) < 1e-6) bx = [1, 0, 0];
+    bx = rotate(bx, bz, this.rnd() * 2 * Math.PI);
+    this.bz = bz; this.bx = unit(bx); this.by = cross(this.bz, this.bx);
+    this.omega = [0, 0, 0];                    /* world angular rate, rad/s */
+    this.railDir = bz.slice();
+    this.railTravel = 0; this.offRail = false; this.railExitSpeed = null;
+    this.moving = false; this.landed = false;
+    this.rollRate = 0;                          /* deg/s about the long axis, the fin model below */
+    this.finCant = (this.rnd() < 0.5 ? -1 : 1) * (0.7 + this.rnd() * 0.5);
+    this.swingAz = this.rnd() * 360;
+    this.airspeed = 0; this.mach = 0; this.aoa = 0; this.windNow = [0, 0, 0];
+  }
+  get alt() { return this.pos[2]; }
+  get tilt() { return Math.acos(clamp(this.bz[2], -1, 1)) * R2D; }
+  /* world vector seen in the body axes */
+  toBody(w) { return [dot(w, this.bx), dot(w, this.by), dot(w, this.bz)]; }
+  /* what an accelerometer feels, m/s^2, world axes: everything but gravity */
+  specificForce() { return [this.acc[0], this.acc[1], this.acc[2] + G]; }
+
+  /* One step. tf: seconds since ignition (negative before); drogueOut, mainOut: what is open; t: clock for swings. */
+  step(h, tf, drogueOut, mainOut, t) {
+    const c = this.cfg, r = c.rocket;
+    this.wind.step(h);
+    /* the motor */
+    const F = tf >= 0 ? this.thrust.force(tf) : 0;
+    const burned = tf >= 0 ? this.thrust.burnedFraction(tf) : 0;
+    this.mass = r.liftoffMass_kg - this.prop * burned;
+    /* the air it moves through */
+    const hAgl = Math.max(0, this.pos[2]);
+    const wv = this.windNow = this.wind.at(hAgl);
+    const vrel = sub(this.vel, wv), speed = norm(vrel);
+    const rho = this.atm.density(hAgl), a = this.atm.sound(hAgl);
+    this.airspeed = speed; this.mach = speed / a;
+    const chute = drogueOut || mainOut;
+    const cdBody = r.cd * (1 + 1.5 * Math.max(0, this.mach - 0.8));            /* a simple rise near Mach 1 */
+    let cdA = cdBody * this.area;
+    if (chute) cdA = this.area * 1.2 + (mainOut ? this.mainCdA : 0) + (drogueOut ? this.drogueCdA : 0);
+    const drag = mul(vrel, -0.5 * rho * speed * cdA);
+    const grav = [0, 0, -G * this.mass];
+
+    let acc;
+    if (!this.offRail) {
+      /* on the rail: only along it, and it does not slide back down */
+      const d = this.railDir;
+      const along = F + dot(drag, d) + dot(grav, d);
+      const vAlong = dot(this.vel, d);
+      if (!this.moving && along <= 0) { acc = [0, 0, 0]; this.vel = [0, 0, 0]; }
+      else {
+        this.moving = true;
+        const aAlong = along / this.mass;
+        const v2 = Math.max(0, vAlong + aAlong * h);
+        acc = mul(d, (v2 - vAlong) / h);
+        this.vel = mul(d, v2);
+        this.pos = add(this.pos, mul(this.vel, h));
+        this.railTravel += v2 * h;
+        if (this.railTravel >= (c.launch?.railLength_m ?? 2)) { this.offRail = true; this.railExitSpeed = v2; }
+      }
+    } else if (this.landed) {
+      acc = [0, 0, 0];
+    } else {
+      acc = mul(add(add(mul(this.bz, F), drag), grav), 1 / this.mass);
+      this.vel = add(this.vel, mul(acc, h));
+      this.pos = add(this.pos, mul(this.vel, h));
+      if (this.pos[2] <= 0 && this.vel[2] < 0) {
+        this.pos[2] = 0; this.vel = [0, 0, 0]; acc = [0, 0, 0]; this.landed = true;
+      }
+    }
+    this.acc = acc;
+
+    /* attitude: where the nose wants to point, and how fast it can get there */
+    let target = null, k = 0;
+    if (this.landed) {
+      const hz = unit([this.bz[0], this.bz[1], 0]);
+      target = unit(add(mul(hz, Math.cos(4 * D2R)), [0, 0, Math.sin(4 * D2R)]));   /* lying on its side */
+      k = 4;
+    } else if (!this.offRail) {
+      target = null;
+    } else if (chute) {
+      /* hanging under the canopy, swinging */
+      this.swingAz += 4 * h;                                    /* the swing plane wanders slowly */
+      const tl = (35 + 20 * Math.sin(t * 1.3) + 10 * Math.sin(t * 3.1)) * D2R, az = this.swingAz * D2R;
+      target = [Math.sin(tl) * Math.sin(az), Math.sin(tl) * Math.cos(az), Math.cos(tl)];
+      k = 2;
+    } else if (speed > 2) {
+      /* the fins turn it into the air it flies through: a stable rocket's natural frequency */
+      target = mul(vrel, 1 / speed);
+      const q = 0.5 * rho * speed * speed, I = this.mass * (r.length_m ** 2) / 12;
+      k = Math.sqrt(q * this.area * CN_ALPHA * Math.max(0.3, r.stability_cal) * r.diameter_m / I);
+      k = Math.min(k, 30);
+    }
+    let w = [0, 0, 0];
+    if (target) {
+      const ax = cross(this.bz, target), s = norm(ax), ang = Math.atan2(s, dot(this.bz, target));
+      this.aoa = ang * R2D;
+      if (s > 1e-9) w = mul(ax, Math.min(k * ang, ang / h * 0.5) / s);
+    } else this.aoa = 0;
+    /* roll: fins a fraction of a degree off spin it up with airspeed; under canopy it twists on the cord */
+    if (!this.moving || this.landed) this.rollRate = 0;
+    else if (!chute) this.rollRate += (this.finCant * 3.2 * Math.max(0, dot(vrel, this.bz)) - this.rollRate) * Math.min(1, h / 0.6);
+    else this.rollRate += (55 * Math.sin(t * 0.9) + 25 * Math.sin(t * 2.3) - this.rollRate) * Math.min(1, h / 0.8);
+    w = add(w, mul(this.bz, this.rollRate * D2R));
+    this.omega = w;
+    const wn = norm(w);
+    if (wn > 1e-12) {
+      const kk = mul(w, 1 / wn);
+      this.bx = rotate(this.bx, kk, wn * h); this.bz = rotate(this.bz, kk, wn * h);
+      this.bz = unit(this.bz); this.bx = unit(sub(this.bx, mul(this.bz, dot(this.bx, this.bz)))); this.by = cross(this.bz, this.bx);
+    }
+  }
+}
+
+/* ---------------------------------------------------------------- prediction (no firmware) */
+/* Drogue a moment after apogee (plus the board's drogue delay), main at the board's main altitude. Returns the
+ * numbers OpenRocket would show and the curves for the plots. */
+function predictFlight(cfg, opts = {}) {
+  const rnd = seededRandom(opts.seed || 7);
+  const body = new RocketBody(cfg, rnd);
+  const h = opts.dt || 0.01, mainAlt = opts.mainDeploy_m ?? 180, delay = opts.drogueDelay_s || 0;
+  let t = 0, drogueAt = null, mainAt = null, apogee = 0, tApogee = 0, maxV = 0, maxMach = 0, maxG = 0, descending = false;
+  const series = [];
+  let drogueOut = false, mainOut = false, last = -1;
+  while (t < (opts.maxTime || 900)) {
+    body.step(h, t, drogueOut, mainOut, t);
+    t += h;
+    const alt = body.pos[2], vz = body.vel[2];
+    if (alt > apogee) { apogee = alt; tApogee = t; }
+    if (body.offRail || body.moving) {
+      maxV = Math.max(maxV, norm(body.vel)); maxMach = Math.max(maxMach, body.mach);
+      maxG = Math.max(maxG, norm(body.specificForce()) / G);
+    }
+    if (!descending && body.moving && t > (body.thrust.burn * 0.5) && vz < 0) { descending = true; drogueAt = t + delay; }
+    if (drogueAt !== null && !drogueOut && t >= drogueAt + 0.25) drogueOut = true;
+    if (descending && mainAt === null && alt <= mainAlt) mainAt = t;
+    if (mainAt !== null && !mainOut && t >= mainAt + 0.4) mainOut = true;
+    if (t - last >= 0.1) { last = t; series.push([t, alt, body.pos[0], body.pos[1], vz]); }
+    if (body.landed) break;
+    if (opts.toApogee && descending) break;
+  }
+  const descMass = cfg.rocket.liftoffMass_kg - (cfg.motor.propellantMass_kg || 0);
+  const rho0 = body.atm.density(0);
+  const dist = Math.hypot(body.pos[0], body.pos[1]);
+  return {
+    apogee_m: apogee, tApogee, maxSpeed: maxV, maxMach, maxG, railExit: body.railExitSpeed,
+    drogueRate: terminalSpeed(descMass, body.area * 1.2 + body.drogueCdA, rho0), mainRate: terminalSpeed(descMass, body.area * 1.2 + body.mainCdA + body.drogueCdA, rho0),
+    landing: { east: body.pos[0], north: body.pos[1], dist, bearing: ((Math.atan2(body.pos[0], body.pos[1]) * R2D) + 360) % 360 },
+    flightTime: t, landed: body.landed, series, impulse: body.thrust.impulse, burn: body.thrust.burn,
+  };
+}
+/* The body Cd that makes the calm, vertical apogee match a known one (an OpenRocket run). */
+function fitCd(cfg, apogee_m) {
+  const calm = { ...cfg, site: { ...cfg.site, wind: { speed_mps: 0 } }, launch: { ...cfg.launch, angle_deg: 0 } };
+  let lo = 0.05, hi = 2.0;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    const p = predictFlight({ ...calm, rocket: { ...calm.rocket, cd: mid } }, { toApogee: true, dt: 0.01 });
+    if (p.apogee_m > apogee_m) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/* ---------------------------------------------------------------- the two rockets */
+/* Numbers from the OpenRocket files (Nov 14 2026); motor impulse, burn time and propellant from thrustcurve.org (the
+ * certified values). The thrust curves are the generic shape scaled to those until a real .eng file is loaded. Cd is fitted so the calm apogee matches OpenRocket's.
+ * ZAFIRO I really flies one parachute at apogee; here it has a small drogue so the sim's dual deploy pulls one. */
+const PRESETS = {
+  zafiro: {
+    id: "zafiro", name: "ZAFIRO I",
+    rocket: { liftoffMass_kg: 1.588, diameter_m: 0.06775, length_m: 1.016, cd: null, stability_cal: 2.12,
+              drogue: { diameter_m: 12 * IN, cd: 1.5 }, main: { diameter_m: 30 * IN, cd: 2.2 } },
+    motor: { name: "AeroTech I218R", totalImpulse_Ns: 330, burnTime_s: 1.5, propellantMass_kg: 0.173 },   /* thrustcurve.org, certified */
+    launch: { railLength_m: 12 * FT, angle_deg: 0, direction_deg: 0 },
+    targetApogee_ft: 3206, mainDeploy_ft: 600, pyroChannels: 2, servoRail_v: 0,
+    source: "OpenRocket ZAFIRO_I_L1.ork, Nov 14: liftoff 1,588 g, calm apogee 3,206 ft, pad stability 2.12 cal",
+  },
+  rubi: {
+    id: "rubi", name: "RUBI",
+    rocket: { liftoffMass_kg: 3.277, diameter_m: 3.124 * IN, length_m: 64.4 * IN, cd: null, stability_cal: 2.96,
+              drogue: { diameter_m: 18 * IN, cd: 1.5 }, main: { diameter_m: 48 * IN, cd: 1.72 } },
+    motor: { name: "AeroTech J500G", totalImpulse_Ns: 723, burnTime_s: 1.4, propellantMass_kg: 0.363 },   /* thrustcurve.org, certified */
+    launch: { railLength_m: 12 * FT, angle_deg: 0, direction_deg: 0 },
+    targetApogee_ft: 4133, mainDeploy_ft: 700, pyroChannels: 2, servoRail_v: 0,
+    source: "OpenRocket RUBI_L2.ork v12: liftoff 3,277 g, apogee 4,133 ft, pad 2.96 cal, main 15.4 ft/s",
+  },
+};
+
+
 /* ---- flight-model.js ---- */
 /*
  * flight-model.js : the WORLD for the Mission Control simulator.
@@ -46322,54 +46739,42 @@ for (const k of ["_frame", "_frameOk", "_commandFrame", "_ack", "_logQuery", "lo
 
 
 
-const G = 9.80665;
-const FT = 0.3048;
 
-/* Example launch site and ground station in Puerto Rico. Placeholder
- * coordinates, change to the real field in the Site box. */
+/* Launch site in Puerto Rico (pad position from Diego, Nov 14 2026), the day's conditions and the launch rail.
+ * The pad height above sea level is still a placeholder. All of it is edited in the setup panel. */
 const DEFAULT_SITE = {
-  name: "Example field, PR",
-  padLat: 18.2,
-  padLon: -66.9,
+  name: "Launch pad, PR",
+  padLat: 18.0361729,
+  padLon: -67.0967436,
   padAltMsl_m: 120,
   gsOffsetEast_m: 180,   /* where the ground station stands, relative to pad */
   gsOffsetNorth_m: -90,
-  windSpeed_mps: 3.5,
-  windFromDeg: 80,       /* wind blows FROM this heading (east wind) */
+  temp_C: null,          /* null: the standard atmosphere's temperature for the pad's height */
+  wind: { speed_mps: 3.5, fromDeg: 80, gustPct: 15, shear: 0.14 },   /* speed 10 m above the ground; FROM this heading */
+  launch: { railLength_m: 12 * FT, angle_deg: 0, direction_deg: 0 },
 };
 
-const PROFILES = {
-  zafiro: {
-    id: "zafiro",
-    name: "ZAFIRO I",
-    motor: "AeroTech I218R",
-    targetApogee_ft: 3100,
-    liftoffMass_kg: 1.85,
-    propellantMass_kg: 0.212,
-    totalImpulse_Ns: 371,
-    burnTime_s: 1.7,
-    drogueTerminal_mps: 24,
-    mainTerminal_mps: 5.5,
-    mainDeploy_ft: 600,
-    pyroChannels: 2,
-    servoRail_v: 0,          /* no servos on this rocket: no BEC plugged in */
-  },
-  rubi: {
-    id: "rubi",
-    name: "RUBI",
-    motor: "AeroTech J500G",
-    targetApogee_ft: 4100,
-    liftoffMass_kg: 4.0,
-    propellantMass_kg: 0.58,
-    totalImpulse_Ns: 1075,
-    burnTime_s: 2.15,
-    drogueTerminal_mps: 28,
-    mainTerminal_mps: 6.0,
-    mainDeploy_ft: 700,
-    pyroChannels: 2,
-    servoRail_v: 0,          /* no servos on this rocket: no BEC plugged in */
-  },
-};
+/* A rocket for the simulator from a setup (world.js PRESETS shape): what the rest of the page reads, plus the
+ * physical description the world flies. A null Cd is fitted so the calm apogee matches targetApogee_ft. */
+function makeProfile(s) {
+  const rocket = { ...s.rocket, drogue: s.rocket.drogue ? { ...s.rocket.drogue } : null, main: s.rocket.main ? { ...s.rocket.main } : null };
+  const motorSpec = { ...s.motor };
+  if (!(rocket.cd > 0)) {
+    rocket.cd = fitCd({ rocket, motor: motorSpec, launch: s.launch || DEFAULT_SITE.launch, site: { padAltMsl_m: DEFAULT_SITE.padAltMsl_m } }, (s.targetApogee_ft || 3000) * FT);
+    rocket.cdFitted = true;
+  }
+  const descent = rocket.liftoffMass_kg - (motorSpec.propellantMass_kg || 0), A = Math.PI * (rocket.diameter_m / 2) ** 2;
+  return {
+    id: s.id, name: s.name, motor: motorSpec.name, motorSpec, rocket,
+    targetApogee_ft: s.targetApogee_ft, liftoffMass_kg: rocket.liftoffMass_kg, propellantMass_kg: motorSpec.propellantMass_kg || 0,
+    totalImpulse_Ns: motorSpec.totalImpulse_Ns, burnTime_s: motorSpec.burnTime_s,
+    drogueTerminal_mps: terminalSpeed(descent, A * 1.2 + chuteCdA(rocket.drogue)),
+    mainTerminal_mps: terminalSpeed(descent, A * 1.2 + chuteCdA(rocket.main) + chuteCdA(rocket.drogue)),
+    mainDeploy_ft: s.mainDeploy_ft ?? 600, pyroChannels: s.pyroChannels ?? 2, servoRail_v: s.servoRail_v ?? 0,
+    launch: s.launch, source: s.source || "",
+  };
+}
+const PROFILES = { zafiro: makeProfile(PRESETS.zafiro), rubi: makeProfile(PRESETS.rubi) };
 
 /* Box-Muller gaussian noise */
 function gauss(sigma) {
@@ -46379,37 +46784,6 @@ function gauss(sigma) {
   return sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-function airDensity(altMsl_m) {
-  /* ISA, troposphere */
-  const T = 288.15 - 0.0065 * altMsl_m;
-  const p = 101325 * Math.pow(T / 288.15, 5.2559);
-  return p / (287.05 * T);
-}
-
-/* Thrust curve: quick ramp, peak early, taper to burnout. Scaled so the
- * integral equals the published total impulse. */
-function thrustShape(t, burn) {
-  if (t < 0 || t >= burn) return 0;
-  const ramp = 0.08 * burn;
-  if (t < ramp) return 1.35 * (t / ramp);
-  const f = (t - ramp) / (burn - ramp);
-  return 1.35 - 0.75 * f;
-}
-
-function integrateShape(burn) {
-  let s = 0;
-  const n = 2000;
-  const dt = burn / n;
-  for (let i = 0; i < n; i++) s += thrustShape(i * dt + dt / 2, burn) * dt;
-  return s;
-}
-
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
-/* ISA pressure at a height above sea level, Pa */
-function pressureAt(altMsl_m) {
-  return 101325 * Math.pow(1 - altMsl_m / 44330.77, 5.25588);
-}
 
 /* What the board keeps with the power off: its settings and its flight records.
  * One object for the life of the page, so a simulator reset behaves like a power cycle. */
@@ -46457,13 +46831,19 @@ class FlightSim {
 
   reset() {
     const p = this.profile;
-    this.thrustScale = p.totalImpulse_Ns / integrateShape(p.burnTime_s);
-    this.cdA = this._tuneDrag();
+    /* the rocket in the world (world.js). A real rail is never exactly straight: half a degree to 1.5 more. */
+    const L = { ...DEFAULT_SITE.launch, ...(this.site.launch || {}) };
+    const slop = 0.5 + Math.random(), slopAz = Math.random() * 360;
+    const la = L.angle_deg * Math.PI / 180, sa = slop * Math.PI / 180, az1 = L.direction_deg * Math.PI / 180, az2 = slopAz * Math.PI / 180;
+    const ne = Math.sin(la) * Math.sin(az1) + Math.sin(sa) * Math.sin(az2), nn = Math.sin(la) * Math.cos(az1) + Math.sin(sa) * Math.cos(az2);
+    const lean = Math.asin(Math.min(0.5, Math.hypot(ne, nn))) * 180 / Math.PI, leanAz = (Math.atan2(ne, nn) * 180 / Math.PI + 360) % 360;
+    this.body = new RocketBody({ rocket: p.rocket, motor: p.motorSpec, launch: { ...L, angle_deg: lean, direction_deg: leanAz },
+                                 site: { ...this.site, wind: { ...DEFAULT_SITE.wind, ...(this.site.wind || {}) } } });
+    this.atm = this.body.atm;
     this.t = 0;                    /* seconds since boot            */
     this.tLaunch = null;           /* seconds since boot at ignition */
     this.alt = 0;                  /* m AGL                         */
     this.vz = 0;
-    this.az = G;                   /* what the accelerometer feels along the rocket, m/s^2 */
     this.east = 0;                 /* m from pad                    */
     this.north = 0;
     this.mass = p.liftoffMass_kg;
@@ -46476,12 +46856,10 @@ class FlightSim {
     this.burned = 0;               /* bit n = e-match n has burned (no continuity) */
     this.burnStart = [null, null, null, null];
     this.pyroCurrent_a = 0;
-    this.padTilt = 1.5 + Math.random() * 1.5;
-    this.tilt = this.padTilt;
-    this.tiltRate = 0;             /* deg/s, what the gyro sees */
-    this.roll = Math.random() * 360;   /* deg about the long axis: wherever it was set on the rail */
+    this.tilt = this.body.tilt;
+    this.roll = Math.random() * 360;   /* deg about the long axis: wherever it was set on the rail (counted from here) */
     this.rollRate = 0;                 /* deg/s */
-    this.finCant = (Math.random() < 0.5 ? -1 : 1) * (0.7 + Math.random() * 0.5);   /* small fin misalignment: every real rocket has one */
+    this.finCant = this.body.finCant;  /* small fin misalignment: every real rocket has one */
     this.pyroBatt_v = 7.95;
     this.battery_v = 4.12;
     this.apogee = 0;
@@ -46491,7 +46869,7 @@ class FlightSim {
     this.gps = { fix: GPS_FIX.NONE, sats: 0, lat_e7: 0, lon_e7: 0, alt_mm: 0 };
     this.nextGpsAt = 0;
     this.stepCount = 0;
-    this.baroPa = [pressureAt(this.site.padAltMsl_m), pressureAt(this.site.padAltMsl_m)];
+    this.baroPa = [this.atm.pressure(0), this.atm.pressure(0)];
     this.stuckPa = null;
     this.frozenGyro = null;
     this.gyroScale = 1 + (Math.random() < 0.5 ? -1 : 1) * 0.015;
@@ -46535,37 +46913,6 @@ class FlightSim {
   get testMode() { return this.fw.testMode; }
   get testSecondsLeft() { return this.fw.testSecondsLeft; }
   get pyroFired() { return this.fw.fired; }
-
-  /* Bisection on Cd*A so the ascent reaches targetApogee. */
-  _tuneDrag() {
-    const target = this.profile.targetApogee_ft * FT;
-    let lo = 0.0005, hi = 0.05;
-    for (let i = 0; i < 40; i++) {
-      const mid = (lo + hi) / 2;
-      if (this._dryRunApogee(mid) > target) lo = mid;
-      else hi = mid;
-    }
-    return (lo + hi) / 2;
-  }
-
-  _dryRunApogee(cdA) {
-    const p = this.profile;
-    let alt = 0, vz = 0, t = 0, mass = p.liftoffMass_kg;
-    const dt = 0.01;
-    const mdot = p.propellantMass_kg / p.burnTime_s;
-    while (t < 60) {
-      const thrust = this.thrustScale * thrustShape(t, p.burnTime_s);
-      if (t < p.burnTime_s) mass -= mdot * dt;
-      const rho = airDensity(this.site.padAltMsl_m + alt);
-      const drag = 0.5 * rho * vz * vz * cdA * Math.sign(vz);
-      const a = (thrust - drag) / mass - G;
-      vz += a * dt;
-      alt += vz * dt;
-      t += dt;
-      if (t > p.burnTime_s && vz < 0) return alt;
-    }
-    return alt;
-  }
 
   /* ---- radio commands. Each one really goes through the firmware's command
    * handler and returns its answer as { ok, text, token? }. ---- */
@@ -46709,150 +47056,48 @@ class FlightSim {
   }
 
   _physics(h) {
-    const p = this.profile;
+    const b = this.body;
     const tf = this.tLaunch === null ? -1 : this.t - this.tLaunch;
-    const rho = airDensity(this.site.padAltMsl_m + this.alt);
-
-    let thrust = 0;
-    if (tf >= 0 && tf < p.burnTime_s) {
-      thrust = this.thrustScale * thrustShape(tf, p.burnTime_s);
-      this.mass -= (p.propellantMass_kg / p.burnTime_s) * h;
-    }
-    if (!this.flying && !this.landedFlag && thrust > this.mass * G) this.flying = true;
-
     /* parachutes take a moment to come out after the charge */
-    if (this.drogueFiredAt !== null && this.t - this.drogueFiredAt > 0.25) this.drogueOut = true;
-    if (this.mainFiredAt !== null && this.t - this.mainFiredAt > 0.4) this.mainOut = true;
-
-    const prevTilt = this.tilt;
-    if (!this.flying) {
-      this.az = G;
-      this.vz = 0;
-      this.rollRate = 0;
-      if (this.landedFlag) this.tilt += (86 - this.tilt) * Math.min(1, h / 0.3);   /* lying on its side */
-      this.tiltRate = (this.tilt - prevTilt) / h;
-      this.battery_v -= 0.0004 * h;
-      return;
-    }
-
-    let cdA = this.cdA;
-    if (this.mainOut) cdA = (2 * this.mass * G) / (rho * p.mainTerminal_mps ** 2);
-    else if (this.drogueOut) cdA = (2 * this.mass * G) / (rho * p.drogueTerminal_mps ** 2);
-
-    const drag = 0.5 * rho * this.vz * this.vz * cdA * Math.sign(this.vz);
-    const aNet = (thrust - drag) / this.mass - G;
-    this.az = aNet + G; /* accelerometer reads thrust and drag, not gravity */
-    this.vz += aNet * h;
-    this.alt += this.vz * h;
-
-    if (this.alt <= 0 && this.vz < 0 && tf > 1) {
-      this.alt = 0;
-      this.vz = 0;
-      this.az = G;
-      this.flying = false;
-      this.landedFlag = true;
-    }
-
-    const underChute = this.drogueOut || this.mainOut;
-    const ascending = !underChute && this.vz > 0;
-
-    /* horizontal: weathercock a little into the wind on the way up,
-     * drift with the wind under canopy */
-    const windRad = ((this.site.windFromDeg + 180) % 360) * Math.PI / 180; /* direction wind blows TO */
-    const wE = this.site.windSpeed_mps * Math.sin(windRad);
-    const wN = this.site.windSpeed_mps * Math.cos(windRad);
-    let vE = 0, vN = 0;
-    if (ascending) {
-      const k = 0.04; /* fraction of vertical speed, into the wind */
-      vE = -wE / this.site.windSpeed_mps * k * Math.abs(this.vz);
-      vN = -wN / this.site.windSpeed_mps * k * Math.abs(this.vz);
-    } else if (this.mainOut) {
-      vE = wE; vN = wN;
-    } else if (this.drogueOut) {
-      vE = wE * 0.9; vN = wN * 0.9;
-    } else {
-      vE = wE * 0.3; vN = wN * 0.3;      /* falling without a parachute */
-    }
-    this.east += vE * h;
-    this.north += vN * h;
-
-    if (this.alt > this.apogee) this.apogee = this.alt;
-
-    /* roll: fins that are a fraction of a degree off spin the rocket up in
-     * proportion to airspeed, and the spin dies away when it slows. Under
-     * canopy it twists slowly back and forth on the shock cord. */
-    if (!underChute) {
-      const target = this.finCant * 3.2 * Math.max(0, this.vz);          /* deg/s */
-      this.rollRate += (target - this.rollRate) * Math.min(1, h / 0.6);
-    } else {
-      const target = 55 * Math.sin(this.t * 0.9) + 25 * Math.sin(this.t * 2.3);
-      this.rollRate += (target - this.rollRate) * Math.min(1, h / 0.8);
-    }
+    if (this.drogueFiredAt !== null && this.t - this.drogueFiredAt > 0.25 && this.profile.rocket.drogue) this.drogueOut = true;
+    if (this.mainFiredAt !== null && this.t - this.mainFiredAt > 0.4 && this.profile.rocket.main) this.mainOut = true;
+    b.step(h, tf, this.drogueOut, this.mainOut, this.t);
+    this.mass = b.mass;
+    this.alt = b.pos[2]; this.vz = b.vel[2]; this.east = b.pos[0]; this.north = b.pos[1];
+    this.flying = b.moving && !b.landed;
+    this.landedFlag = b.landed;
+    this.tilt = b.tilt;
+    this.rollRate = this.flying ? b.rollRate : 0;
     this.roll = ((this.roll + this.rollRate * h) % 360 + 360) % 360;
-
-    /* tilt: slow growth in coast, swinging under canopy */
-    if (underChute) {
-      const target = 35 + 20 * Math.sin(this.t * 1.3) + 10 * Math.sin(this.t * 3.1);
-      this.tilt += (target - this.tilt) * Math.min(1, h / 0.5);
-    } else if (thrust > 0) {
-      this.tilt += 0.4 * h;
-    } else if (this.vz > 0) {
-      this.tilt += (3 + 40 * Math.max(0, 1 - Math.abs(this.vz) / 60)) * h;
-    } else {
-      this.tilt += (170 - this.tilt) * Math.min(1, h / 1.5);              /* nose over, falling */
-    }
-    this.tilt = clamp(this.tilt, 0, 180);
-    this.tiltRate = (this.tilt - prevTilt) / h;
-
+    if (this.alt > this.apogee) this.apogee = this.alt;
     this.battery_v -= 0.0004 * h;
   }
+
+  /** The wind right now at the rocket's height (or at 10 m on the pad): { speed m/s, fromDeg }. */
+  windNow() { return this.body.wind.describe(Math.max(10, this.alt)); }
 
   /* What each chip reads right now. This is the whole interface to the firmware. */
   _sensors() {
     const p = this.profile;
     const f = this.faults;
     const underChute = this.flying && (this.drogueOut || this.mainOut);
-    const tiltRad = this.tilt * Math.PI / 180;
-    const sf = this.az / G;                   /* specific force, in g */
-
-    /* Attitude: the body is tilted by `tilt` from vertical, then rolled by `roll`
-     * about its own long axis. From that, "up" seen in body axes is
-     * (-sin(tilt) cos(roll), sin(tilt) sin(roll), cos(tilt)), and a change of tilt
-     * shows on the gyro's x and y in proportion to sin and cos of the roll angle. */
-    const rollRad = this.roll * Math.PI / 180;
-    /* accelerometers, body axes, +z to the nose */
-    let ax, ay = 0, azb;
-    if (!this.flying || underChute) {
-      /* resting or hanging: the force is straight up in the world */
-      ax = -sf * Math.sin(tiltRad) * Math.cos(rollRad);
-      ay = sf * Math.sin(tiltRad) * Math.sin(rollRad);
-      azb = sf * Math.cos(tiltRad);
-    } else {
-      ax = 0;                                 /* thrust and drag act along the rocket */
-      azb = sf;
-    }
+    const b = this.body;
+    /* accelerometers, body axes, +z to the nose: everything the rocket feels except gravity */
+    const sfb = b.toBody(b.specificForce()).map((v) => v / G);
     const shake = underChute ? 0.25 : (this.flying ? 0.03 : 0.004);
-    const lo = [ax + gauss(shake + 0.004), ay + gauss(shake + 0.004), azb + gauss(0.012)];
-    const hi = [ax + gauss(0.3), ay + gauss(0.3), azb + gauss(0.3)];
+    const lo = [sfb[0] + gauss(shake + 0.004), sfb[1] + gauss(shake + 0.004), sfb[2] + gauss(0.012)];
+    const hi = [sfb[0] + gauss(0.3), sfb[1] + gauss(0.3), sfb[2] + gauss(0.3)];
     for (let k = 0; k < 3; k++) lo[k] = clamp(lo[k], -32, 32);      /* the low-g chip clips at 32 g */
 
-    /* gyro, deg/s: tilting shows on x and y (split by the roll angle), roll on z, plus a small bias */
+    /* gyro, deg/s: the rate the body really turns at, in its own axes, a small scale error and bias */
     const gs = this.gyroScale;      /* no gyro is exact: this one reads about 1.5 % off */
-    let gyro = [
-      this.tiltRate * Math.sin(rollRad) * gs + this.gyroBias[0] + gauss(0.08),
-      this.tiltRate * Math.cos(rollRad) * gs + this.gyroBias[1] + gauss(0.08),
-      this.rollRate * gs + this.gyroBias[2] + gauss(0.08),
-    ];
-    /* magnetometer: the Earth's field stays put while the rocket tilts and rolls. Roughly the
-     * field over Puerto Rico (27 uT horizontal, 26 uT pointing down), turned into body axes
-     * the same way as "up" above. */
-    const hx = 27 * Math.cos(0.7), hy = 27 * Math.sin(0.7), hz = -26;
-    const tx = hx * Math.cos(tiltRad) - hz * Math.sin(tiltRad), tz = hx * Math.sin(tiltRad) + hz * Math.cos(tiltRad);
-    const mag = [
-      tx * Math.cos(rollRad) + hy * Math.sin(rollRad) + gauss(0.25),
-      -tx * Math.sin(rollRad) + hy * Math.cos(rollRad) + gauss(0.25),
-      tz + gauss(0.25),
-    ];
+    const wb = b.toBody(b.omega).map((v) => v * 180 / Math.PI);
+    let gyro = [wb[0] * gs + this.gyroBias[0] + gauss(0.08), wb[1] * gs + this.gyroBias[1] + gauss(0.08), wb[2] * gs + this.gyroBias[2] + gauss(0.08)];
+    /* magnetometer: roughly the field over Puerto Rico (27 uT horizontal toward magnetic north, about 12 deg west
+     * of true north, and 26 uT pointing down), seen in the body axes */
+    const dec = -12 * Math.PI / 180;
+    const mb = b.toBody([27 * Math.sin(dec), 27 * Math.cos(dec), -26]);
+    const mag = [mb[0] + gauss(0.25), mb[1] + gauss(0.25), mb[2] + gauss(0.25)];
     if (f.gyroFrozen) {
       if (!this.frozenGyro) this.frozenGyro = gyro.slice();
       gyro = this.frozenGyro;
@@ -46865,9 +47110,9 @@ class FlightSim {
 
     /* barometers: a fresh sample every 4th step */
     if (this.stepCount % BARO_EVERY === 0) {
-      const mach = Math.abs(this.vz) / 340;
+      const mach = b.mach;
       for (let i = 0; i < 2; i++) {
-        let pa = pressureAt(this.site.padAltMsl_m + this.alt) + gauss(i === 0 ? 3.0 : 2.0);
+        let pa = this.atm.pressure(Math.max(0, this.alt)) + gauss(i === 0 ? 3.0 : 2.0);
         if (mach > 0.9 && mach < 1.3) pa *= 1.05;                  /* shock wave on the vent holes */
         if (this.t < f.spikeUntil) pa += 1500;
         if (i === 1 && f.baro1Stuck) {
@@ -46949,7 +47194,8 @@ class FlightSim {
     return {
       alt_m: this.alt, vz: this.vz, apogee_m: this.apogee,
       east: this.east, north: this.north, state: this.state,
-      flightTime: this.flightTime, cdA: this.cdA,
+      flightTime: this.flightTime, cd: this.profile.rocket.cd, wind: this.windNow(), airspeed: this.body.airspeed, aoa: this.body.aoa,
+      railExit: this.body.railExitSpeed,
       drogueOut: this.drogueOut, mainOut: this.mainOut,
       fwAlt_m: this.fw.altitude_m, fwVz: this.fw.velocity_mps,
       fwBackend: this.fw.backend, fwLockout: this.fw.lockout,
@@ -47560,6 +47806,339 @@ class EarthView {
 }
 
 
+/* ---- setup.js ---- */
+/*
+ * setup.js : the simulator's setup panel, like a small OpenRocket. Rocket, motor (generic curve or a real .eng
+ * file from thrustcurve.org), parachutes, launch rail, site and wind. "Run prediction" flies the same physics as
+ * the simulator (world.js) with ideal deployments and no firmware, and shows the numbers and two plots.
+ * "Apply" hands the rocket and the site to the simulator, which then resets.
+ *
+ * Units here are the usual hobby ones: grams, inches, feet, mph, degrees F. Everything inside is SI.
+ * Only the simulated world changes: the flight computer's own settings (main altitude, drogue delay) are set from
+ * the ground station or the phone, as on the real rocket, and the prediction uses what the board holds.
+ */
+
+
+const SU_G = 0.001;
+const suF2C = (f) => (f - 32) * 5 / 9, suC2F = (c) => c * 9 / 5 + 32;
+
+/* field: [id, label, unit, from SI to shown, from shown to SI, step] */
+const SU_FIELDS = {
+  rocket: [
+    ["r-name", "Name", "", null, null, "text"],
+    ["r-mass", "Liftoff mass", "g", (v) => v / SU_G, (v) => v * SU_G, 1],
+    ["r-dia", "Diameter", "in", (v) => v / IN, (v) => v * IN, 0.001],
+    ["r-len", "Length", "in", (v) => v / IN, (v) => v * IN, 0.1],
+    ["r-cd", "Drag coefficient", "Cd", (v) => v, (v) => v, 0.01],
+    ["r-stab", "Stability", "cal", (v) => v, (v) => v, 0.01],
+  ],
+  motor: [
+    ["m-name", "Motor", "", null, null, "text"],
+    ["m-imp", "Total impulse", "Ns", (v) => v, (v) => v, 1],
+    ["m-burn", "Burn time", "s", (v) => v, (v) => v, 0.01],
+    ["m-prop", "Propellant", "g", (v) => v / SU_G, (v) => v * SU_G, 1],
+  ],
+  recovery: [
+    ["d-dia", "Drogue diameter", "in", (v) => v / IN, (v) => v * IN, 1],
+    ["d-cd", "Drogue Cd", "", (v) => v, (v) => v, 0.01],
+    ["n-dia", "Main diameter", "in", (v) => v / IN, (v) => v * IN, 1],
+    ["n-cd", "Main Cd", "", (v) => v, (v) => v, 0.01],
+  ],
+  launch: [
+    ["l-rail", "Rail length", "ft", (v) => v / FT, (v) => v * FT, 0.5],
+    ["l-angle", "Rail angle", "deg", (v) => v, (v) => v, 1],
+    ["l-dir", "Leaning toward", "deg", (v) => v, (v) => v, 5],
+    ["s-lat", "Pad latitude", "", (v) => v, (v) => v, "any"],
+    ["s-lon", "Pad longitude", "", (v) => v, (v) => v, "any"],
+    ["s-alt", "Pad height", "ft MSL", (v) => v / FT, (v) => v * FT, 10],
+    ["s-temp", "Temperature", "F", (v) => v, (v) => v, 1],
+    ["s-gse", "Ground station east", "ft", (v) => v / FT, (v) => v * FT, 10],
+    ["s-gsn", "Ground station north", "ft", (v) => v / FT, (v) => v * FT, 10],
+  ],
+  wind: [
+    ["w-spd", "Wind at 33 ft", "mph", (v) => v / MPH, (v) => v * MPH, 1],
+    ["w-dir", "Coming from", "deg", (v) => v, (v) => v, 5],
+    ["w-gust", "Gusts", "%", (v) => v, (v) => v, 5],
+  ],
+};
+const SU_SHEAR = [[0, "Same at every height"], [0.1, "Over water or flat sand"], [0.14, "Open field (usual)"], [0.2, "Trees or buildings around"], [0.28, "Town"]];
+
+const su$ = (id) => document.getElementById(id);
+const suRound = (v, step) => {
+  if (v === null || v === undefined || !isFinite(v)) return "";
+  if (step === "any") return String(+v.toFixed(7));
+  const d = step >= 1 ? 0 : Math.min(4, Math.ceil(-Math.log10(step)));
+  return String(+v.toFixed(d));
+};
+
+function suStateFromPreset(id) {
+  const p = PRESETS[id], prof = makeProfile(p);
+  return {
+    preset: id, id: p.id, name: p.name, targetApogee_ft: p.targetApogee_ft, mainDeploy_ft: p.mainDeploy_ft, pyroChannels: p.pyroChannels,
+    servoRail_v: p.servoRail_v, source: p.source,
+    rocket: { ...prof.rocket }, motor: { ...p.motor },
+    launch: { ...DEFAULT_SITE.launch, ...(p.launch || {}) },
+  };
+}
+
+class SetupPanel {
+  /**
+   * @param {object} o  { onApply(profile, site), board() -> { mainDeploy_m, drogueDelay_s } | null,
+   *                      load() -> saved setup or null, save(setup) }
+   */
+  constructor(o) {
+    this.o = o;
+    const saved = (() => { try { return o.load ? o.load() : null; } catch (e) { return null; } })();
+    this.s = saved && saved.rocket && saved.motor ? saved : { ...suStateFromPreset("zafiro"), site: this._siteDefaults() };
+    if (!this.s.site) this.s.site = this._siteDefaults();
+    this.root = su$("setup");
+    this._build();
+    this._fill();
+    this.predict();
+  }
+  _siteDefaults() {
+    const d = DEFAULT_SITE;
+    return { padLat: d.padLat, padLon: d.padLon, padAltMsl_m: d.padAltMsl_m, temp_F: null, gsOffsetEast_m: d.gsOffsetEast_m, gsOffsetNorth_m: d.gsOffsetNorth_m, wind: { ...d.wind } };
+  }
+
+  /* ---- what the simulator gets */
+  profile() {
+    const s = this.s;
+    return makeProfile({ id: s.preset === "custom" ? "custom" : s.id, name: s.name || "Custom rocket", rocket: s.rocket, motor: s.motor, launch: s.launch,
+      targetApogee_ft: s.targetApogee_ft, mainDeploy_ft: s.mainDeploy_ft ?? 600, pyroChannels: s.pyroChannels ?? 2, servoRail_v: s.servoRail_v ?? 0, source: s.source });
+  }
+  site() {
+    const st = this.s.site;
+    return { ...DEFAULT_SITE, padLat: st.padLat, padLon: st.padLon, padAltMsl_m: st.padAltMsl_m, temp_C: st.temp_F === null || st.temp_F === undefined ? null : suF2C(st.temp_F),
+      gsOffsetEast_m: st.gsOffsetEast_m, gsOffsetNorth_m: st.gsOffsetNorth_m, wind: { ...st.wind }, launch: { ...this.s.launch } };
+  }
+  get presetId() { return this.s.preset; }
+  loadPreset(id) {
+    if (id === "custom") { this.s.preset = "custom"; this._fill(); return; }
+    const site = this.s.site;
+    this.s = { ...suStateFromPreset(id), site };
+    this._fill(); this._save(); this.predict();
+  }
+
+  /* ---- the panel */
+  _build() {
+    const group = (title, key, extra = "") => `<fieldset class="su-group"><legend>${title}</legend><div class="su-grid">${SU_FIELDS[key].map(([id, label, unit, , , step]) =>
+      `<label for="su-${id}">${label}</label><span class="su-in"><input id="su-${id}" ${step === "text" ? 'type="text"' : `type="number" step="${step}"`} autocomplete="off"><span class="su-unit">${unit}</span></span>`).join("")}</div>${extra}</fieldset>`;
+    this.root.innerHTML = `
+      <div class="su-top">
+        <label for="su-preset">Start from</label>
+        <select id="su-preset">${Object.values(PRESETS).map((p) => `<option value="${p.id}">${p.name}</option>`).join("")}<option value="custom">Custom</option></select>
+        <span class="su-note" id="su-source"></span>
+      </div>
+      <div class="su-groups">
+        ${group("Rocket", "rocket", `<p class="su-note" id="su-cd-note"></p>`)}
+        ${group("Motor", "motor", `<div class="su-row"><label class="btn su-file">Load thrust curve (.eng)<input type="file" id="su-eng" accept=".eng,.txt"></label><button class="btn" id="su-generic" type="button">Generic shape</button></div>
+          <canvas id="su-curve" class="su-curve" aria-label="Thrust curve"></canvas><p class="su-note" id="su-motor-note"></p>`)}
+        ${group("Parachutes", "recovery", `<p class="su-note" id="su-chute-note"></p>`)}
+        ${group("Launch and site", "launch", `<p class="su-note">Rail angle is from vertical; "leaning toward" is a compass heading (0 north, 90 east). Leave temperature empty for the standard atmosphere.</p>`)}
+        ${group("Wind", "wind", `<div class="su-grid"><label for="su-w-shear">Higher up</label><span class="su-in"><select id="su-w-shear">${SU_SHEAR.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select></span></div>
+          <p class="su-note" id="su-wind-note"></p>`)}
+      </div>
+      <div class="su-row su-actions">
+        <button class="btn" id="su-run" type="button">Run prediction</button>
+        <button class="btn primary" id="su-apply" type="button">Apply to the simulator</button>
+        <span class="su-note" id="su-applied"></span>
+      </div>
+      <div class="su-results" id="su-results"></div>
+      <div class="su-plots">
+        <figure><canvas id="su-plot-alt" aria-label="Altitude over time"></canvas><figcaption>Altitude over time</figcaption></figure>
+        <figure><canvas id="su-plot-map" aria-label="Ground track seen from above"></canvas><figcaption>Seen from above: flight path, landing spot, wind</figcaption></figure>
+      </div>`;
+    su$("su-preset").addEventListener("change", (e) => this.loadPreset(e.target.value));
+    for (const key of Object.keys(SU_FIELDS)) for (const [id] of SU_FIELDS[key]) su$(`su-${id}`).addEventListener("change", () => this._read(key));
+    su$("su-w-shear").addEventListener("change", () => this._read("wind"));
+    su$("su-eng").addEventListener("change", (e) => this._loadEng(e.target.files && e.target.files[0]));
+    su$("su-generic").addEventListener("click", () => { delete this.s.motor.curve; this._custom(); this._fill(); this._save(); this.predict(); });
+    su$("su-run").addEventListener("click", () => this.predict());
+    su$("su-apply").addEventListener("click", () => this.apply());
+  }
+  _value(key, id) {
+    const s = this.s;
+    switch (id) {
+      case "r-name": return s.name; case "r-mass": return s.rocket.liftoffMass_kg; case "r-dia": return s.rocket.diameter_m;
+      case "r-len": return s.rocket.length_m; case "r-cd": return s.rocket.cd; case "r-stab": return s.rocket.stability_cal;
+      case "m-name": return s.motor.name; case "m-imp": return s.motor.totalImpulse_Ns; case "m-burn": return s.motor.burnTime_s; case "m-prop": return s.motor.propellantMass_kg;
+      case "d-dia": return s.rocket.drogue ? s.rocket.drogue.diameter_m : 0; case "d-cd": return s.rocket.drogue ? s.rocket.drogue.cd : 1.5;
+      case "n-dia": return s.rocket.main ? s.rocket.main.diameter_m : 0; case "n-cd": return s.rocket.main ? s.rocket.main.cd : 2.0;
+      case "l-rail": return s.launch.railLength_m; case "l-angle": return s.launch.angle_deg; case "l-dir": return s.launch.direction_deg;
+      case "s-lat": return s.site.padLat; case "s-lon": return s.site.padLon; case "s-alt": return s.site.padAltMsl_m;
+      case "s-temp": return s.site.temp_F; case "s-gse": return s.site.gsOffsetEast_m; case "s-gsn": return s.site.gsOffsetNorth_m;
+      case "w-spd": return s.site.wind.speed_mps; case "w-dir": return s.site.wind.fromDeg; case "w-gust": return s.site.wind.gustPct;
+    }
+    return null;
+  }
+  _fill() {
+    su$("su-preset").value = this.s.preset;
+    for (const key of Object.keys(SU_FIELDS)) for (const [id, , , toShown, , step] of SU_FIELDS[key]) {
+      const el = su$(`su-${id}`), v = this._value(key, id);
+      el.value = step === "text" ? (v || "") : v === null || v === undefined ? "" : suRound(toShown(v), step);
+    }
+    su$("su-s-temp").placeholder = `standard: ${suC2F(isaTempC(this.s.site.padAltMsl_m || 0)).toFixed(0)}`;
+    su$("su-w-shear").value = String(SU_SHEAR.reduce((b, [v]) => Math.abs(v - (this.s.site.wind.shear ?? 0.14)) < Math.abs(b - (this.s.site.wind.shear ?? 0.14)) ? v : b, 0.14));
+    su$("su-source").textContent = this.s.preset !== "custom" && this.s.source ? `From ${this.s.source}.` : "Your own rocket.";
+    su$("su-cd-note").textContent = this.s.rocket.cdFitted && this.s.preset !== "custom"
+      ? `Cd fitted so the calm, vertical apogee matches OpenRocket's ${this.s.targetApogee_ft.toLocaleString()} ft. Stability sets how hard it turns into the wind.`
+      : "Stability (calibers) sets how hard it turns into the wind. Cd is the whole rocket's drag, OpenRocket shows it per Mach number.";
+    const th = makeThrust(this.s.motor);
+    su$("su-motor-note").textContent = `${motorClass(th.impulse)} class, ${th.impulse.toFixed(0)} Ns, average ${(th.impulse / th.burn).toFixed(0)} N over ${th.burn.toFixed(2)} s. ${this.s.motor.curve ? "Real thrust curve from the file." : "Generic curve shape: load the motor's .eng file from thrustcurve.org for the real one."}`;
+    this._drawCurve(th);
+    const p = this.profile();
+    const fps = (v) => isFinite(v) ? `${(v / FT).toFixed(0)} ft/s` : "free fall";
+    su$("su-chute-note").textContent = `At the pad: about ${fps(p.drogueTerminal_mps)} under the drogue, ${fps(p.mainTerminal_mps)} under the main. Diameter 0 = no parachute. The main altitude and the drogue delay are the flight computer's own settings (set them from the ground station or the phone).`;
+    const w = this.s.site.wind;
+    su$("su-wind-note").textContent = w.speed_mps > 0
+      ? `About ${(w.speed_mps / MPH * Math.pow(305 / 10, w.shear ?? 0.14)).toFixed(0)} mph at 1,000 ft and ${(w.speed_mps / MPH * Math.pow(1000 / 10, w.shear ?? 0.14)).toFixed(0)} mph at 3,300 ft. Gusts: 0 steady, 10 to 20 a normal day, 30+ gusty.`
+      : "Calm.";
+  }
+  _custom() { if (this.s.preset !== "custom") { this.s.preset = "custom"; this.s.id = "custom"; this.s.rocket.cdFitted = false; } }
+  _read(key) {
+    const s = this.s;
+    for (const [id, , , , toSI, step] of SU_FIELDS[key]) {
+      const raw = su$(`su-${id}`).value;
+      if (step === "text") { if (id === "r-name") s.name = raw.trim() || "Custom rocket"; else s.motor.name = raw.trim() || "Motor"; continue; }
+      if (raw === "" && id === "s-temp") { s.site.temp_F = null; continue; }
+      const v = parseFloat(raw);
+      if (!isFinite(v)) continue;
+      const si = toSI(v);
+      switch (id) {
+        case "r-mass": s.rocket.liftoffMass_kg = Math.max(0.05, si); break; case "r-dia": s.rocket.diameter_m = Math.max(0.005, si); break;
+        case "r-len": s.rocket.length_m = Math.max(0.05, si); break; case "r-cd": s.rocket.cd = Math.max(0.05, si); s.rocket.cdFitted = false; break;
+        case "r-stab": s.rocket.stability_cal = Math.max(0.3, si); break;
+        case "m-imp": s.motor.totalImpulse_Ns = Math.max(0.1, si); delete s.motor.curve; break;
+        case "m-burn": s.motor.burnTime_s = Math.max(0.05, si); delete s.motor.curve; break;
+        case "m-prop": s.motor.propellantMass_kg = Math.max(0, si); break;
+        case "d-dia": s.rocket.drogue = si > 0 ? { diameter_m: si, cd: s.rocket.drogue ? s.rocket.drogue.cd : 1.5 } : null; break;
+        case "d-cd": if (s.rocket.drogue) s.rocket.drogue.cd = Math.max(0.1, si); break;
+        case "n-dia": s.rocket.main = si > 0 ? { diameter_m: si, cd: s.rocket.main ? s.rocket.main.cd : 2.0 } : null; break;
+        case "n-cd": if (s.rocket.main) s.rocket.main.cd = Math.max(0.1, si); break;
+        case "l-rail": s.launch.railLength_m = Math.max(0.3, si); break; case "l-angle": s.launch.angle_deg = Math.max(0, Math.min(30, si)); break;
+        case "l-dir": s.launch.direction_deg = ((si % 360) + 360) % 360; break;
+        case "s-lat": s.site.padLat = Math.max(-89, Math.min(89, si)); break; case "s-lon": s.site.padLon = Math.max(-180, Math.min(180, si)); break;
+        case "s-alt": s.site.padAltMsl_m = Math.max(-400, Math.min(5000, si)); break; case "s-temp": s.site.temp_F = Math.max(-40, Math.min(130, si)); break;
+        case "s-gse": s.site.gsOffsetEast_m = si; break; case "s-gsn": s.site.gsOffsetNorth_m = si; break;
+        case "w-spd": s.site.wind.speed_mps = Math.max(0, Math.min(25, si)); break; case "w-dir": s.site.wind.fromDeg = ((si % 360) + 360) % 360; break;
+        case "w-gust": s.site.wind.gustPct = Math.max(0, Math.min(60, si)); break;
+      }
+    }
+    if (key === "wind") s.site.wind.shear = parseFloat(su$("su-w-shear").value);
+    if (key === "rocket" || key === "motor" || key === "recovery") this._custom();
+    this._fill(); this._save(); this.predict();
+  }
+  _loadEng(file) {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      const m = parseEng(r.result);
+      if (!m) { su$("su-motor-note").textContent = "That file does not read as a RASP .eng thrust curve."; return; }
+      const s = this.s, oldMotorMass = s.motor.totalMass_kg;
+      s.motor = { name: m.name, totalImpulse_Ns: m.totalImpulse_Ns, burnTime_s: m.burnTime_s, propellantMass_kg: m.propellantMass_kg, totalMass_kg: m.totalMass_kg, curve: m.curve };
+      if (oldMotorMass) s.rocket.liftoffMass_kg += m.totalMass_kg - oldMotorMass;      /* swapping one known motor for another */
+      this._custom(); this._fill(); this._save(); this.predict();
+      su$("su-eng").value = "";
+    };
+    r.readAsText(file);
+  }
+  _save() { try { if (this.o.save) this.o.save(this.s); } catch (e) { /* storage is a convenience */ } }
+  apply() {
+    this._save();
+    this.o.onApply(this.profile(), this.site());
+    su$("su-applied").textContent = `Applied: ${this.s.name}, ${this.s.motor.name}. The simulator was reset.`;
+  }
+
+  /* ---- prediction */
+  predict() {
+    const prof = this.profile(), site = this.site(), b = (this.o.board && this.o.board(prof.id)) || {};
+    const r = predictFlight({ rocket: prof.rocket, motor: prof.motorSpec, launch: site.launch, site }, {
+      mainDeploy_m: b.mainDeploy_m ?? prof.mainDeploy_ft * FT, drogueDelay_s: b.drogueDelay_s || 0, dt: 0.01 });
+    this.last = { r, site, mainDeploy_m: b.mainDeploy_m ?? prof.mainDeploy_ft * FT };
+    const compass = (d) => ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(d / 45) % 8];
+    const ft = (m) => `${Math.round(m / FT).toLocaleString()} ft`;
+    const items = [
+      ["Apogee", ft(r.apogee_m), `at ${r.tApogee.toFixed(1)} s`],
+      ["Max speed", `${Math.round(r.maxSpeed / FT)} ft/s`, `Mach ${r.maxMach.toFixed(2)}`],
+      ["Max acceleration", `${r.maxG.toFixed(1)} g`, ""],
+      ["Off the rail", r.railExit ? `${Math.round(r.railExit / FT)} ft/s` : "never", r.railExit && r.railExit < 15 ? "slow: under 50 ft/s" : ""],
+      ["Under drogue", isFinite(r.drogueRate) ? `${Math.round(r.drogueRate / FT)} ft/s` : "free fall", ""],
+      ["Under main", isFinite(r.mainRate) ? `${Math.round(r.mainRate / FT)} ft/s` : "no main", `opens at ${ft(this.last.mainDeploy_m)}`],
+      ["Lands", ft(r.landing.dist), r.landing.dist > 3 ? `toward ${compass(r.landing.bearing)} (${r.landing.bearing.toFixed(0)} deg)` : ""],
+      ["Flight time", `${r.flightTime.toFixed(0)} s`, r.landed ? "" : "(still falling at the time limit)"],
+    ];
+    su$("su-results").innerHTML = items.map(([k, v, n]) => `<div class="su-res"><span class="su-k">${k}</span><span class="su-v num">${v}</span><span class="su-n">${n}</span></div>`).join("");
+    this._drawAlt(); this._drawMap();
+    return r;
+  }
+
+  /* ---- drawing */
+  _canvas(id, hFrac = 0.6) {
+    const c = su$(id), dpr = window.devicePixelRatio || 1, w = c.clientWidth || 320, h = Math.round(w * hFrac);
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); c.style.height = `${h}px`;
+    const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const css = getComputedStyle(document.documentElement), v = (n, d) => (css.getPropertyValue(n) || d).trim();
+    return { g, w, h, col: { line: v("--line", "#27323f"), muted: v("--muted", "#8b9bb0"), fg: v("--fg", "#e6edf5"), accent: v("--accent", "#ffb020"), good: v("--good", "#3ddc97"), bad: v("--bad", "#ff5d5d") } };
+  }
+  _drawCurve(th) {
+    const { g, w, h, col } = this._canvas("su-curve", 0.28);
+    const fmax = Math.max(...th.curve.map((p) => p[1])) * 1.1 || 1, pad = 4;
+    g.strokeStyle = col.line; g.beginPath(); g.moveTo(pad, h - pad); g.lineTo(w - pad, h - pad); g.stroke();
+    g.strokeStyle = col.accent; g.lineWidth = 1.6; g.beginPath();
+    th.curve.forEach(([t, f], i) => { const x = pad + (w - 2 * pad) * t / th.burn, y = h - pad - (h - 2 * pad) * f / fmax; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+    g.fillStyle = col.muted; g.font = "11px JetBrains Mono, monospace"; g.fillText(`${fmax / 1.1 | 0} N peak`, pad + 2, 12);
+  }
+  _drawAlt() {
+    if (!this.last) return;
+    const { g, w, h, col } = this._canvas("su-plot-alt", 0.55), s = this.last.r.series;
+    const L = 44, B = 22, T = 8, R = 8, tmax = s.length ? s[s.length - 1][0] : 1, amax = Math.max(1, ...s.map((p) => p[1])) / FT * 1.08;
+    const X = (t) => L + (w - L - R) * t / tmax, Y = (ft) => h - B - (h - B - T) * ft / amax;
+    g.font = "11px JetBrains Mono, monospace"; g.fillStyle = col.muted; g.strokeStyle = col.line; g.lineWidth = 1;
+    const step = amax > 4000 ? 1000 : amax > 1500 ? 500 : 200;
+    for (let a = 0; a <= amax; a += step) { g.beginPath(); g.moveTo(L, Y(a)); g.lineTo(w - R, Y(a)); g.stroke(); g.fillText(`${a}`, 4, Y(a) + 4); }
+    const ts = tmax > 120 ? 30 : tmax > 40 ? 10 : 5;
+    for (let t = 0; t <= tmax; t += ts) g.fillText(`${t}s`, X(t) - 8, h - 6);
+    g.strokeStyle = col.accent; g.lineWidth = 2; g.beginPath();
+    s.forEach(([t, a], i) => (i ? g.lineTo(X(t), Y(a / FT)) : g.moveTo(X(t), Y(a / FT))));
+    g.stroke();
+    g.fillStyle = col.fg; g.fillText("ft", 4, T + 4);
+  }
+  _drawMap() {
+    if (!this.last) return;
+    const { g, w, h, col } = this._canvas("su-plot-map", 0.55), { r, site } = this.last, s = r.series;
+    const gs = [site.gsOffsetEast_m, site.gsOffsetNorth_m];
+    const pts = s.map((p) => [p[2], p[3]]).concat([[0, 0], gs]);
+    const span = Math.max(60, ...pts.map(([e, n]) => Math.max(Math.abs(e), Math.abs(n)))) * 1.15;
+    const cx = w / 2, cy = h / 2, k = Math.min(w, h) / 2 / span;
+    const P = ([e, n]) => [cx + e * k, cy - n * k];
+    g.strokeStyle = col.line; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(cx, 6); g.lineTo(cx, h - 6); g.moveTo(6, cy); g.lineTo(w - 6, cy); g.stroke();
+    g.fillStyle = col.muted; g.font = "11px JetBrains Mono, monospace"; g.fillText("N", cx + 4, 14);
+    /* scale bar */
+    const bar = Math.pow(10, Math.floor(Math.log10(span / FT))) , bpx = bar * FT * k;
+    g.strokeStyle = col.muted; g.beginPath(); g.moveTo(10, h - 10); g.lineTo(10 + bpx, h - 10); g.stroke(); g.fillText(`${bar.toLocaleString()} ft`, 10, h - 14);
+    /* path */
+    g.strokeStyle = col.accent; g.lineWidth = 2; g.beginPath();
+    s.forEach((p, i) => { const [x, y] = P([p[2], p[3]]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+    const dot = (pt, c, label) => { const [x, y] = P(pt); g.fillStyle = c; g.beginPath(); g.arc(x, y, 4, 0, 2 * Math.PI); g.fill(); g.fillStyle = col.fg; g.fillText(label, x + 6, y - 6); };
+    dot([0, 0], col.good, "pad"); dot(gs, col.muted, "GS"); dot([r.landing.east, r.landing.north], col.bad, "lands");
+    /* wind arrow, top right: the way it blows */
+    const wd = site.wind;
+    if (wd.speed_mps > 0) {
+      const to = (wd.fromDeg + 180) * Math.PI / 180, ax = w - 34, ay = 30, len = 18;
+      const ex = ax + Math.sin(to) * len, ey = ay - Math.cos(to) * len, sx = ax - Math.sin(to) * len, sy = ay + Math.cos(to) * len;
+      g.strokeStyle = col.fg; g.lineWidth = 2; g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.stroke();
+      const hd = Math.atan2(ey - sy, ex - sx);
+      g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex - 7 * Math.cos(hd - 0.5), ey - 7 * Math.sin(hd - 0.5)); g.lineTo(ex - 7 * Math.cos(hd + 0.5), ey - 7 * Math.sin(hd + 0.5)); g.closePath(); g.fillStyle = col.fg; g.fill();
+      g.fillStyle = col.muted; g.fillText(`${(wd.speed_mps / MPH).toFixed(0)} mph`, ax - 22, ay + 30);
+    }
+  }
+}
+
+
 /* ---- app.js ---- */
 /*
  * app.js : Mission Control simulator UI.
@@ -47571,6 +48150,7 @@ class EarthView {
  * Receiver only. When the ESP32 ground station is real, the Receiver
  * stays and FlightSim goes away.
  */
+
 
 
 
@@ -48165,20 +48745,28 @@ let autoTabDone = { flight: false, recovery: false };
 let lastRender = 0;
 let lastGsRender = 0;
 
+/* the site and the rocket come from the setup panel (setup.js) */
+let setup = null;
 function readSite() {
-  site = {
-    ...DEFAULT_SITE,
-    padLat: parseFloat($("pad-lat").value) || DEFAULT_SITE.padLat,
-    padLon: parseFloat($("pad-lon").value) || DEFAULT_SITE.padLon,
-    windSpeed_mps: Math.max(0, parseFloat($("wind-spd").value) || 0),
-    windFromDeg: ((parseFloat($("wind-dir").value) || 0) + 360) % 360,
-    gsOffsetEast_m: parseFloat($("gs-e").value) || 0,
-    gsOffsetNorth_m: parseFloat($("gs-n").value) || 0,
-  };
+  site = setup ? setup.site() : { ...DEFAULT_SITE };
   /* the ground station knows its own position from its own GPS */
   gsHardware.lat = site.padLat + site.gsOffsetNorth_m / 111320;
   gsHardware.lon = site.padLon + site.gsOffsetEast_m / (111320 * Math.cos(site.padLat * Math.PI / 180));
   syncGsPosition();
+}
+function boardSettingsFor(id) {
+  const sv = sim && sim.saved ? sim.saved[id] : null;
+  return sv ? { mainDeploy_m: sv.mainDeploy_dm / 10, drogueDelay_s: sv.drogueDelay_ms / 1000 } : null;
+}
+function initSetup() {
+  setup = new SetupPanel({
+    onApply: (p) => { profile = p; $("profile").value = setup.presetId === "custom" ? "custom" : p.id; resetSim(); },
+    board: boardSettingsFor,
+    load: () => prefs.setup || null,
+    save: (s) => { prefs.setup = s; savePrefs(); },
+  });
+  profile = setup.profile();
+  $("profile").value = setup.presetId === "custom" ? "custom" : profile.id;
 }
 
 function syncGsPosition() {
@@ -48518,6 +49106,10 @@ function renderAll(force) {
 
   /* sim status */
   $("sim-clock").textContent = `T ${clock.toFixed(1)} s`;
+  if (sim && !replay) {
+    const w = sim.windNow(), mph = w.speed / 0.44704;
+    setText($("sim-wind"), mph < 0.5 ? "Calm" : `Wind ${mph.toFixed(0)} mph from ${Math.round(w.fromDeg)}°`);
+  }
   const pill = $("sim-pill");
   pill.classList.toggle("live", !paused && launched);
   pill.classList.toggle("paused", paused);
@@ -49431,7 +50023,11 @@ function setView(v) {
 }
 
 function wire() {
-  $("profile").addEventListener("change", (e) => { profile = PROFILES[e.target.value]; resetSim(); });
+  $("profile").addEventListener("change", (e) => {
+    if (e.target.value !== "custom") setup.loadPreset(e.target.value);
+    profile = setup.profile();
+    resetSim();
+  });
   $("btn-arm").addEventListener("click", () => {
     if (!sim) return;
     const ack = sim.arm(!sim.armed);
@@ -49605,6 +50201,7 @@ if (recoveryMode === "map") {
 boards = new Boards();
 gsCtx = $("gs").getContext("2d");
 gsImg = gsCtx.createImageData(480, 320);
+initSetup();
 wire();
 resetSim();
 setView("both");
